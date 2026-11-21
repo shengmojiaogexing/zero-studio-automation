@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 · ZERO STUDIO 摄影工作室中控台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: radial-gradient(circle at 20% 15%, rgba(111,168,165,0.14), transparent 42%),
+                        radial-gradient(circle at 80% 85%, rgba(226,186,200,0.10), transparent 45%),
+                        #0b0d12;
+            color: #f3f4f6;
+            font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+        .glass {
+            background: rgba(20, 24, 33, 0.82);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md glass rounded-3xl p-8 md:p-10 shadow-2xl space-y-8">
+        <div class="space-y-2 text-center">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] font-semibold tracking-[0.2em] text-[#7dd3cf]">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                ZERO STUDIO
+            </div>
+            <h1 class="text-2xl font-bold tracking-tight text-white pt-1">CN.庄泽 / 零柒 · 摄影工作台</h1>
+            <p class="text-xs text-gray-400">一站式接单管理 · 微信/QQ 智能客服 · 后期仿色交付</p>
+        </div>
+
+        <form id="loginForm" class="space-y-4">
+            <div class="space-y-1.5">
+                <label class="block text-xs font-medium text-gray-300">管理员账号</label>
+                <input id="username" type="text" required autocomplete="username" value="admin"
+                    class="w-full rounded-xl bg-black/40 border border-white/10 px-4 py-3 text-sm text-white placeholder-gray-500 outline-none focus:border-[#6fa8a5] transition" />
+            </div>
+            <div class="space-y-1.5">
+                <label class="block text-xs font-medium text-gray-300">登录密码</label>
+                <input id="password" type="password" required autocomplete="current-password" placeholder="请输入管理员密码"
+                    class="w-full rounded-xl bg-black/40 border border-white/10 px-4 py-3 text-sm text-white placeholder-gray-500 outline-none focus:border-[#6fa8a5] transition" />
+            </div>
+            <div id="errBox" class="hidden rounded-xl bg-red-500/10 border border-red-500/30 px-3.5 py-2.5 text-xs text-red-300"></div>
+            <button id="submitBtn" type="submit"
+                class="w-full py-3 rounded-xl bg-[#6fa8a5] hover:bg-[#7fbab7] text-[#0b0d12] text-sm font-bold tracking-wide transition shadow-lg shadow-[#6fa8a5]/15">
+                进入工作台
+            </button>
+        </form>
+
+        <div class="text-center text-[11px] text-gray-500 pt-2 border-t border-white/5">
+            加密会话保护 · 支持手机与桌面外网安全访问
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const err = document.getElementById('errBox');
+            err.classList.add('hidden');
+            btn.disabled = true;
+            btn.textContent = '验证登录中...';
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: document.getElementById('username').value.trim(),
+                        password: document.getElementById('password').value
+                    })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.detail || '账号或密码错误');
+                const next = new URLSearchParams(window.location.search).get('next');
+                window.location.href = next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
+            } catch (ex) {
+                err.textContent = ex.message;
+                err.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = '进入工作台';
+            }
+        });
+    </script>
+</body>
+</html>

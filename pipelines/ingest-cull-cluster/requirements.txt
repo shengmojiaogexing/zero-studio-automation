@@ -1,0 +1,33 @@
+# ==============================================================================
+# Zero Studio Automation - Sprint 2: Ingest / Cull / Cluster Dependencies
+# ==============================================================================
+# 使用方式：
+#   1. 安装核心必装依赖（开箱即用，支持拷卡双校验、废片预筛、二维码切段、CPU聚类回退）：
+#        pip install -r requirements.txt
+#   2. 如需启用 RTX 5070 Ti (CUDA) 完整多模态角色聚类（SigLIP/CLIP + InsightFace + HDBSCAN），
+#      请按下方「GPU 可选增强依赖」说明安装对应包。
+
+# -------------------- 1. 核心必装依赖 (Core Required) --------------------
+opencv-python>=4.10.0
+Pillow>=10.4.0
+numpy>=1.26.0
+exifread>=3.0.0
+rawpy>=0.21.0
+requests>=2.32.0
+python-dotenv>=1.0.1
+
+# -------------------- 2. GPU / 多模态可选增强依赖 (Optional GPU) --------------------
+# 注意：RTX 5070 Ti (Blackwell sm_120) 建议安装 PyTorch CUDA 12.8+ nightly/stable：
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+#
+# 视觉多模态服饰/角色向量（SigLIP / CLIP 二选一或全装）：
+# transformers>=4.46.0
+# open-clip-torch>=2.29.0
+#
+# 多人人脸特征识别（合影多标签增强）：
+# insightface>=0.7.3
+# onnxruntime-gpu>=1.20.0
+#
+# 高维向量密度聚类与二维码增强：
+# hdbscan>=0.8.40
+# pyzbar>=0.1.9

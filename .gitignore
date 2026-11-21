@@ -1,0 +1,82 @@
+# 环境变量与密钥
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Node 与前端构建
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Android / Gradle
+.gradle/
+**/build/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# 数据库与运行数据
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+logs/
+work/
+*.log
+*.pid
+
+# NapCat/QQ 客户端、账号配置、聊天名单与缓存
+infra/napcat/
+configs/im_rules.json
+
+# 测试生成的二维码与临时调试产物
+apps/booking-site/q1_long_L.png
+apps/booking-site/q1_long_M.png
+apps/booking-site/q2_mid_M.png
+apps/booking-site/q3_short_M.png
+apps/booking-site/qcur.png
+apps/booking-site/qr_fixed.png
+apps/booking-site/qrlen/
+apps/booking-site/qrtest2/
+apps/booking-site/qrtest3/
+apps/booking-site/_genqr.js
+apps/booking-site/_qrtest2.js
+apps/booking-site/_qrtest3.js
+*.bak
+
+# IDE、原嵌套仓库备份与操作系统
+.vscode/
+.idea/
+.git.backup/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# 可执行程序与动态库
+*.exe
+*.dll
+*.so
+*.dylib

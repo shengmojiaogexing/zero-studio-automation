@@ -1,0 +1,25 @@
+# ==============================================================================
+# ZERO STUDIO · 外网电脑 XTCP P2P 访问端配置模板 (frpc_visitor.toml)
+# 使用方式：在外网笔记本上设置环境变量 FRP_TOKEN 与 FRP_XTCP_SECRET 后运行：
+#   frpc -c frpc_visitor.toml
+# 连接成功后在浏览器打开 http://127.0.0.1:13080 即可点对点直连本机中控台（零消耗 VPS 流量）
+# ==============================================================================
+
+serverAddr = "156.238.228.39"
+serverPort = 7000
+
+[auth]
+method = "token"
+token = "{{ .Envs.FRP_TOKEN }}"
+
+[transport]
+tls.enable = true
+
+[[visitors]]
+name = "studio-p2p-visitor"
+type = "xtcp"
+serverName = "studio-p2p"
+secretKey = "{{ .Envs.FRP_XTCP_SECRET }}"
+bindAddr = "127.0.0.1"
+bindPort = 13080
+keepTunnelOpen = true

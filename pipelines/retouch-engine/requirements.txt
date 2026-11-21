@@ -1,0 +1,11 @@
+# ==============================================================================
+# Zero Studio Automation - Sprint 4: Retouch Engine Dependencies
+# ==============================================================================
+# 核心必装依赖（16-bit TIFF XMP 转换、Gemini REST 多模态仿色、PS UXP Bridge 通信、局部 Patch 生图）
+httpx>=0.27.0
+requests>=2.32.0
+Pillow>=10.4.0
+numpy>=1.26.0
+opencv-python>=4.10.0
+rawpy>=0.21.0
+python-dotenv>=1.0.1

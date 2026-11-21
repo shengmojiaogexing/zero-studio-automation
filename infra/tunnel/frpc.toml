@@ -1,0 +1,61 @@
+# ==============================================================================
+# ZERO STUDIO · Windows 本地 FRP 客户端模板 (frpc.toml)
+# 运行方式：由根目录 start_studio.ps1 自动加载 .env 环境变量后启动 frpc.exe -c infra/tunnel/frpc.toml
+# 安全说明：仅穿透 booking-site (供客户选图/交付) 与 control-center (强登录鉴权)；
+#           im-gateway 与 booking-site /api/internal/* 严禁配置穿透，仅限 127.0.0.1 访问！
+# ==============================================================================
+
+serverAddr = "156.238.228.39"
+serverPort = 7000
+
+[auth]
+method = "token"
+token = "{{ .Envs.FRP_TOKEN }}"
+
+[transport]
+tls.enable = true
+
+# 隧道 1：客户外网选图与成片交付入口 (http://156.238.228.39:8080)
+[[proxies]]
+name = "booking-public"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 3000
+remotePort = 8080
+
+# 隧道 2：手机/平板外网登录统一中控台 (http://156.238.228.39:8081)
+[[proxies]]
+name = "studio-public"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 3080
+remotePort = 8081
+
+# 隧道 3：FRP XTCP P2P 点对点打洞（外网电脑直连本机中控台，大文件预览零消耗 VPS 带宽）
+[[proxies]]
+name = "studio-p2p"
+type = "xtcp"
+secretKey = "{{ .Envs.FRP_XTCP_SECRET }}"
+localIP = "127.0.0.1"
+localPort = 3080
+
+# 隧道 4：随身修图机（Windows）公网回传通道 —— 独立端口 8083
+#
+# 为什么单独开一条端口：
+#   Windows 修图机会被带到没有家庭局域网的地方，需要跨公网从 Mac 领任务、回传产物。
+#   但 /api/internal/* 权限覆盖订单/支付/管理，绝不能暴露公网。
+#
+# 安全设计（不依赖 FRP 做路径过滤，而是靠服务端）：
+#   1. 走独立端口 8083，与客户站 8080 完全隔离，互不影响
+#   2. 服务端只有 /api/worker/* 一组接口接受 HMAC 签名鉴权；
+#      /api/internal/* 仍然只认 127.0.0.1，经隧道进来的请求会被直接 403
+#   3. 独立密钥 WORKER_SYNC_TOKEN + 时间窗防重放（见 server.js requireWorkerAuth）
+#   4. 可选 WORKER_ALLOWED_IPS 限制来源 IP
+[[proxies]]
+name = "worker-sync"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 3000
+remotePort = 8083
+
+

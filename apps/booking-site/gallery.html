@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZERO STUDIO | 在线选图系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800;900&family=Noto+Sans+SC:wght@300;400;600;700;900&display=swap');
+        :root {
+            --bg-color: #161a21;
+            --card-bg: rgba(30, 34, 43, 0.72);
+            --color-teal: #6fa8a5;
+            --color-pink: #e2bac8;
+        }
+        body {
+            background: radial-gradient(circle at 20% 0%, rgba(111, 168, 165, 0.14) 0%, transparent 45%),
+                        radial-gradient(circle at 80% 100%, rgba(226, 186, 200, 0.12) 0%, transparent 45%),
+                        var(--bg-color);
+            color: #eef0f4;
+            font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
+            min-height: 100vh;
+            padding-bottom: 7rem;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .glass-card {
+            background: var(--card-bg);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .photo-card.selected {
+            border-color: var(--color-teal);
+            box-shadow: 0 0 0 2px rgba(111, 168, 165, 0.55);
+        }
+        .preset-card.selected {
+            border-color: var(--color-teal);
+            background: rgba(111, 168, 165, 0.16);
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <!-- 顶部信息栏 -->
+    <header class="sticky top-0 z-30 glass-card border-x-0 border-t-0 px-4 py-3">
+        <div class="max-w-5xl mx-auto flex items-center justify-between gap-3">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-black tracking-[0.25em] uppercase text-[#6fa8a5]">ZERO</span>
+                    <span id="statusBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-gray-300">加载中...</span>
+                </div>
+                <h1 id="headerTitle" class="text-base md:text-lg font-bold truncate mt-0.5">正在获取专属选图相册</h1>
+                <p id="headerSubtitle" class="text-xs text-gray-400 truncate"></p>
+            </div>
+            <div class="text-right shrink-0">
+                <div class="text-xs text-gray-400">已勾选</div>
+                <div class="text-lg font-black text-[#6fa8a5]"><span id="selectedCountTop">0</span> <span class="text-xs font-normal text-gray-400">张</span></div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 pt-5 space-y-6">
+        <!-- 错误提示 -->
+        <div id="errorBox" class="hidden glass-card rounded-2xl p-8 text-center">
+            <p class="text-red-400 font-bold text-base mb-2" id="errorText">相册加载失败</p>
+            <p class="text-xs text-gray-400">请检查选图链接是否完整，或联系摄影师重新获取。</p>
+        </div>
+
+        <!-- 锁单状态提示 -->
+        <div id="lockedBanner" class="hidden glass-card rounded-2xl p-4 border-[#6fa8a5]/40 bg-[#6fa8a5]/10">
+            <div class="flex items-start gap-3">
+                <span class="text-lg">🔒</span>
+                <div>
+                    <p class="text-sm font-bold text-[#6fa8a5]">选图已提交并锁定</p>
+                    <p id="lockedSummary" class="text-xs text-gray-300 mt-1"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 预设风格选择区 -->
+        <section id="presetSection" class="hidden space-y-3">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-[#e2bac8]">1. 选择出片调色预设</h2>
+                <span class="text-[11px] text-gray-400">后期将按此风格精修</span>
+            </div>
+            <div id="presetGrid" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></div>
+        </section>
+
+        <!-- 预览图网格 -->
+        <section id="gallerySection" class="hidden space-y-3">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-[#6fa8a5]">2. 勾选需要精修的照片</h2>
+                <span id="photoTotalHint" class="text-[11px] text-gray-400">点击图片可放大预览</span>
+            </div>
+            <div id="emptyGallery" class="hidden glass-card rounded-2xl p-10 text-center text-sm text-gray-400">
+                当前相册暂无可选预览图，请稍后再刷新查看。
+            </div>
+            <div id="photoGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+        </section>
+    </main>
+
+    <!-- 底部悬浮提交栏 -->
+    <footer id="bottomBar" class="hidden fixed bottom-0 inset-x-0 z-30 glass-card border-x-0 border-b-0 px-4 py-3">
+        <div class="max-w-5xl mx-auto flex items-center justify-between gap-4">
+            <div class="text-xs">
+                <div class="text-gray-300">已选 <b id="selectedCountBottom" class="text-[#6fa8a5] text-sm">0</b> 张 · 预设：<b id="selectedPresetLabel" class="text-[#e2bac8]">未选择</b></div>
+                <div class="text-[11px] text-gray-400 mt-0.5">提交后将锁定选图清单进入修图排期</div>
+            </div>
+            <button id="submitBtn" onclick="submitSelection()" disabled
+                class="shrink-0 px-6 py-3 rounded-xl font-black text-xs tracking-widest uppercase bg-[#6fa8a5] text-[#161a21] disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition">
+                提交并锁单
+            </button>
+        </div>
+    </footer>
+
+    <!-- 大图预览 Lightbox -->
+    <div id="lightbox" class="hidden fixed inset-0 z-50 bg-black/95 flex flex-col">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-white/10">
+            <div class="text-xs text-gray-300 truncate" id="lightboxCaption"></div>
+            <button onclick="closeLightbox()" class="text-white/80 hover:text-white text-sm font-bold px-3 py-1 rounded-lg bg-white/10">关闭</button>
+        </div>
+        <div class="flex-1 flex items-center justify-center p-3 overflow-hidden relative">
+            <button onclick="stepLightbox(-1)" class="absolute left-3 z-10 w-10 h-10 rounded-full bg-black/60 border border-white/20 text-white text-lg">‹</button>
+            <img id="lightboxImg" src="" alt="" class="max-h-full max-w-full object-contain rounded-lg select-none">
+            <button onclick="stepLightbox(1)" class="absolute right-3 z-10 w-10 h-10 rounded-full bg-black/60 border border-white/20 text-white text-lg">›</button>
+        </div>
+        <div class="px-4 py-3 border-t border-white/10 flex items-center justify-center">
+            <button id="lightboxToggleBtn" onclick="toggleCurrentLightboxAsset()"
+                class="px-6 py-2.5 rounded-full text-xs font-bold tracking-wider bg-[#6fa8a5] text-[#161a21]">
+                勾选此图
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const token = decodeURIComponent(window.location.pathname.split('/').filter(Boolean).pop() || '');
+        let bookingInfo = null;
+        let presets = [];
+        let assets = [];
+        let selectedIds = new Set();
+        let selectedPreset = '';
+        let isLocked = false;
+        let lightboxIndex = -1;
+
+        const STATUS_LABELS = {
+            BOOKED: '已预约',
+            SHOT: '已拍摄',
+            CLUSTERED: '待选图',
+            SELECTED: '已选图锁单',
+            RETOUCHING: '精修中',
+            REVIEW_PENDING: '待验收',
+            DELIVERED: '已交付'
+        };
+
+        async function initGallery() {
+            if (!token) {
+                showError('缺少选图凭证 Token');
+                return;
+            }
+            try {
+                const res = await fetch(`/api/gallery/${encodeURIComponent(token)}`, { cache: 'no-store' });
+                const data = await res.json();
+                if (!res.ok || data.status !== 'ok') {
+                    showError(data.message || '相册加载失败');
+                    return;
+                }
+                bookingInfo = data.booking;
+                presets = data.presets || [];
+                assets = data.assets || [];
+                isLocked = Boolean(bookingInfo.locked);
+                selectedIds = new Set(Array.isArray(bookingInfo.selected_assets) ? bookingInfo.selected_assets : []);
+                selectedPreset = bookingInfo.preset_code || (presets[0] ? presets[0].code : '');
+
+                renderHeader();
+                renderPresets();
+                renderAssets();
+                updateControls();
+            } catch (err) {
+                showError('网络异常，请稍后刷新重试');
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('errorBox').classList.remove('hidden');
+            document.getElementById('errorText').textContent = msg;
+            document.getElementById('statusBadge').textContent = '无效链接';
+        }
+
+        function renderHeader() {
+            document.getElementById('headerTitle').textContent = `${bookingInfo.cn || '客户'} · ${bookingInfo.character || '角色拍摄'}`;
+            document.getElementById('headerSubtitle').textContent = `${bookingInfo.event_name || ''} ${bookingInfo.date || ''} ${bookingInfo.time || ''}`.trim();
+            const badge = document.getElementById('statusBadge');
+            badge.textContent = STATUS_LABELS[bookingInfo.status] || bookingInfo.status;
+            if (isLocked) {
+                badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#6fa8a5]/25 text-[#6fa8a5]';
+                const presetObj = presets.find(p => p.code === selectedPreset);
+                document.getElementById('lockedBanner').classList.remove('hidden');
+                document.getElementById('lockedSummary').textContent =
+                    `已选 ${selectedIds.size} 张照片 · 出片预设：${presetObj ? presetObj.name : (selectedPreset || '默认')}。如需修改请联系摄影师解锁。`;
+            }
+        }
+
+        function renderPresets() {
+            document.getElementById('presetSection').classList.remove('hidden');
+            const grid = document.getElementById('presetGrid');
+            grid.innerHTML = presets.map(p => {
+                const active = selectedPreset === p.code;
+                return `
+                    <button type="button" onclick="selectPreset('${p.code}')" ${isLocked ? 'disabled' : ''}
+                        class="preset-card glass-card rounded-2xl p-4 text-left transition ${active ? 'selected' : ''} ${isLocked ? 'opacity-80 cursor-default' : 'hover:border-white/25'}">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-bold text-sm text-white">${p.name}</span>
+                            <span class="w-4 h-4 rounded-full border flex items-center justify-center text-[10px] ${active ? 'border-[#6fa8a5] bg-[#6fa8a5] text-[#161a21] font-black' : 'border-white/30'}">${active ? '✓' : ''}</span>
+                        </div>
+                        <p class="text-[11px] text-gray-400 mt-1.5 leading-relaxed">${p.desc}</p>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function renderAssets() {
+            document.getElementById('gallerySection').classList.remove('hidden');
+            document.getElementById('photoTotalHint').textContent = `共 ${assets.length} 张有效预览图（已自动隐藏测光/虚焦废片）`;
+            if (assets.length === 0) {
+                document.getElementById('emptyGallery').classList.remove('hidden');
+                return;
+            }
+            const grid = document.getElementById('photoGrid');
+            grid.innerHTML = assets.map((a, idx) => {
+                const checked = selectedIds.has(a.id);
+                return `
+                    <div class="photo-card glass-card rounded-2xl overflow-hidden border transition relative group ${checked ? 'selected' : 'border-white/10'}">
+                        <div class="aspect-[3/4] bg-black/40 overflow-hidden cursor-pointer" onclick="openLightbox(${idx})">
+                            <img src="${a.preview_url}" alt="${a.filename}" loading="lazy" class="w-full h-full object-cover">
+                        </div>
+                        <button type="button" onclick="toggleAsset(${a.id})" ${isLocked ? 'disabled' : ''}
+                            class="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center text-sm font-black transition shadow-lg ${checked ? 'bg-[#6fa8a5] text-[#161a21]' : 'bg-black/60 text-white border border-white/30'} ${isLocked ? 'cursor-default' : ''}">
+                            ${checked ? '✓' : '+'}
+                        </button>
+                        <div class="px-2.5 py-2 flex items-center justify-between gap-2 text-[11px]">
+                            <span class="truncate text-gray-300 font-mono">${a.filename}</span>
+                            <span class="${checked ? 'text-[#6fa8a5] font-bold' : 'text-gray-500'}">${checked ? '已选' : '#' + a.id}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectPreset(code) {
+            if (isLocked) return;
+            selectedPreset = code;
+            renderPresets();
+            updateControls();
+        }
+
+        function toggleAsset(id) {
+            if (isLocked) return;
+            if (selectedIds.has(id)) selectedIds.delete(id);
+            else selectedIds.add(id);
+            renderAssets();
+            updateControls();
+            updateLightboxButton();
+        }
+
+        function updateControls() {
+            document.getElementById('selectedCountTop').textContent = selectedIds.size;
+            document.getElementById('selectedCountBottom').textContent = selectedIds.size;
+            const presetObj = presets.find(p => p.code === selectedPreset);
+            document.getElementById('selectedPresetLabel').textContent = presetObj ? presetObj.name : '未选择';
+
+            const bottomBar = document.getElementById('bottomBar');
+            const submitBtn = document.getElementById('submitBtn');
+            if (isLocked || assets.length === 0) {
+                bottomBar.classList.add('hidden');
+            } else {
+                bottomBar.classList.remove('hidden');
+                submitBtn.disabled = !(selectedIds.size > 0 && selectedPreset);
+            }
+        }
+
+        function openLightbox(idx) {
+            lightboxIndex = idx;
+            const item = assets[idx];
+            if (!item) return;
+            document.getElementById('lightboxImg').src = item.preview_url;
+            document.getElementById('lightboxCaption').textContent = `${idx + 1} / ${assets.length} · ${item.filename}`;
+            document.getElementById('lightbox').classList.remove('hidden');
+            updateLightboxButton();
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.add('hidden');
+            lightboxIndex = -1;
+        }
+
+        function stepLightbox(delta) {
+            if (assets.length === 0 || lightboxIndex < 0) return;
+            const next = (lightboxIndex + delta + assets.length) % assets.length;
+            openLightbox(next);
+        }
+
+        function updateLightboxButton() {
+            if (lightboxIndex < 0) return;
+            const item = assets[lightboxIndex];
+            const btn = document.getElementById('lightboxToggleBtn');
+            if (isLocked) {
+                btn.disabled = true;
+                btn.textContent = selectedIds.has(item.id) ? '已锁定入选' : '已锁定未选';
+                btn.className = 'px-6 py-2.5 rounded-full text-xs font-bold tracking-wider bg-white/15 text-gray-300';
+                return;
+            }
+            btn.disabled = false;
+            if (selectedIds.has(item.id)) {
+                btn.textContent = '✓ 已勾选（点击取消）';
+                btn.className = 'px-6 py-2.5 rounded-full text-xs font-bold tracking-wider bg-[#6fa8a5] text-[#161a21]';
+            } else {
+                btn.textContent = '+ 勾选此图';
+                btn.className = 'px-6 py-2.5 rounded-full text-xs font-bold tracking-wider bg-white text-[#161a21]';
+            }
+        }
+
+        function toggleCurrentLightboxAsset() {
+            if (lightboxIndex < 0 || isLocked) return;
+            toggleAsset(assets[lightboxIndex].id);
+        }
+
+        async function submitSelection() {
+            if (isLocked || selectedIds.size === 0 || !selectedPreset) return;
+            const presetObj = presets.find(p => p.code === selectedPreset);
+            const confirmed = window.confirm(
+                `确认提交选图？\n已选照片：${selectedIds.size} 张\n出片预设：${presetObj ? presetObj.name : selectedPreset}\n\n提交后订单将锁定，无法自行修改。`
+            );
+            if (!confirmed) return;
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.textContent = '提交中...';
+
+            try {
+                const res = await fetch(`/api/gallery/${encodeURIComponent(token)}/select`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        asset_ids: Array.from(selectedIds),
+                        preset_code: selectedPreset
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok || data.status !== 'ok') {
+                    alert(data.message || '提交失败');
+                    btn.disabled = false;
+                    btn.textContent = '提交并锁单';
+                    return;
+                }
+                isLocked = true;
+                bookingInfo.status = 'SELECTED';
+                renderHeader();
+                renderPresets();
+                renderAssets();
+                updateControls();
+                alert('🎉 选图已成功提交并锁定！摄影师将按您选择的预设开始精修。');
+            } catch (err) {
+                alert('网络异常，请重试');
+                btn.disabled = false;
+                btn.textContent = '提交并锁单';
+            }
+        }
+
+        initGallery();
+    </script>
+</body>
+</html>

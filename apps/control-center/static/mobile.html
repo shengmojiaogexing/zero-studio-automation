@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b0f14">
+    <title>ZERO STUDIO · 手机中控台</title>
+    <style>
+        :root { --bg:#0b0f14; --panel:#131922; --panel2:#19222d; --line:rgba(255,255,255,.08); --text:#edf3f6; --muted:#82909e; --accent:#79b8b2; --accent2:#a0d8d2; --rose:#f0a3b5; --green:#72d5aa; --amber:#efc278; }
+        * { box-sizing:border-box; margin:0; padding:0; }
+        [hidden] { display:none !important; }
+        body { background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; font-size:14px; -webkit-font-smoothing:antialiased; }
+        button,input,textarea,select { font:inherit; }
+        button { cursor:pointer; }
+        button:disabled { opacity:.5; cursor:default; }
+        a { color:inherit; text-decoration:none; }
+        .app-header { position:sticky; top:0; z-index:30; padding:calc(13px + env(safe-area-inset-top)) 18px 13px; background:rgba(11,15,20,.92); backdrop-filter:blur(18px); border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
+        .brand { display:flex; align-items:center; gap:10px; }
+        .brand-mark { width:34px; height:34px; border-radius:11px; display:grid; place-items:center; background:linear-gradient(145deg,#8bc8c1,#3e706c); color:#08110f; font-size:12px; font-weight:900; }
+        .brand-name { font-size:13px; font-weight:800; letter-spacing:.12em; }
+        .brand-sub { color:var(--muted); font-size:10px; margin-top:2px; }
+        .icon-btn { width:38px; height:38px; border-radius:12px; border:1px solid var(--line); background:rgba(255,255,255,.04); color:var(--text); display:grid; place-items:center; }
+        .icon-btn svg { width:18px; height:18px; }
+        main { width:100%; max-width:720px; margin:0 auto; padding:18px 14px calc(94px + env(safe-area-inset-bottom)); }
+        .page { animation:pageIn .18s ease; }
+        @keyframes pageIn { from { opacity:.4; transform:translateY(3px); } to { opacity:1; transform:none; } }
+        .page-head { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; margin:2px 2px 16px; }
+        h1 { font-size:23px; line-height:1.2; letter-spacing:-.03em; }
+        h2 { font-size:15px; }
+        .sub { font-size:11px; color:var(--muted); margin-top:6px; line-height:1.5; }
+        .text-btn { border:0; background:none; color:var(--accent2); font-size:12px; min-height:36px; padding:0 4px; }
+        .card { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:16px; margin-bottom:12px; }
+        .card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:13px; }
+        .hero { background:linear-gradient(145deg,rgba(121,184,178,.19),rgba(121,184,178,.035) 58%,rgba(226,186,200,.07)); border-color:rgba(121,184,178,.25); padding:20px 17px; }
+        .hero-label { color:var(--accent2); font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
+        .hero-title { font-size:26px; font-weight:800; margin-top:7px; letter-spacing:-.04em; }
+        .hero-copy { color:#a7b5c0; font-size:12px; line-height:1.6; margin-top:8px; max-width:280px; }
+        .hero-action { margin-top:16px; display:inline-flex; align-items:center; gap:8px; background:var(--accent); color:#071311; border:0; border-radius:12px; padding:11px 14px; font-weight:800; font-size:12px; }
+        .grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
+        .metric { min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:15px; padding:12px 9px; }
+        .metric-value { font-size:21px; line-height:1; font-weight:800; }
+        .metric-label { color:var(--muted); font-size:9px; margin-top:7px; white-space:nowrap; }
+        .status-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+        .status-cell { border-radius:12px; padding:11px; background:rgba(0,0,0,.18); display:flex; align-items:center; gap:8px; font-size:11px; color:#bdc8d0; }
+        .dot { width:7px; height:7px; border-radius:50%; background:var(--amber); flex:none; }
+        .dot.ok { background:var(--green); box-shadow:0 0 0 4px rgba(114,213,170,.08); }
+        .dot.bad { background:var(--rose); }
+        .badge { display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:999px; padding:3px 8px; color:var(--muted); background:rgba(255,255,255,.035); font-size:9px; font-weight:700; white-space:nowrap; }
+        .badge.needs_reply { color:var(--rose); border-color:rgba(240,163,181,.25); background:rgba(240,163,181,.09); }
+        .badge.replied,.badge.DELIVERED { color:var(--green); border-color:rgba(114,213,170,.24); background:rgba(114,213,170,.08); }
+        .badge.no_reply { color:var(--muted); }
+        .badge.BOOKED { color:#91c9ed; border-color:rgba(145,201,237,.24); background:rgba(145,201,237,.08); }
+        .badge.REVIEW_PENDING,.badge.RETOUCHING { color:var(--amber); border-color:rgba(239,194,120,.24); background:rgba(239,194,120,.08); }
+        .badge.SELECTED { color:var(--accent2); border-color:rgba(121,184,178,.24); background:rgba(121,184,178,.08); }
+        .btn { min-height:42px; border-radius:12px; border:1px solid var(--line); padding:10px 14px; background:rgba(255,255,255,.055); color:var(--text); font-size:12px; font-weight:700; }
+        .btn.primary { background:var(--accent); color:#071311; border-color:transparent; }
+        .btn.warn { color:var(--amber); border-color:rgba(239,194,120,.25); background:rgba(239,194,120,.08); }
+        .btn.danger { color:var(--rose); border-color:rgba(240,163,181,.22); background:rgba(240,163,181,.07); }
+        .btn.block { width:100%; }
+        .btn-row { display:flex; gap:8px; flex-wrap:wrap; }
+        .btn-row .btn { flex:1; }
+        .input,.textarea,.select { width:100%; color:var(--text); background:rgba(0,0,0,.27); border:1px solid var(--line); border-radius:12px; padding:11px 12px; outline:none; font-size:12px; }
+        .input:focus,.textarea:focus,.select:focus { border-color:rgba(121,184,178,.65); box-shadow:0 0 0 3px rgba(121,184,178,.07); }
+        .input::placeholder,.textarea::placeholder { color:#63717f; }
+        .textarea { resize:vertical; line-height:1.55; min-height:74px; }
+        .field { margin-bottom:11px; }
+        .field label { display:block; color:var(--muted); font-size:10px; margin-bottom:6px; }
+        .field-row { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+        .search { position:relative; margin-bottom:11px; }
+        .search .input { padding-left:35px; min-height:44px; }
+        .search svg { position:absolute; width:16px; left:12px; top:14px; color:var(--muted); }
+        .chips { display:flex; gap:7px; overflow-x:auto; padding:1px 1px 10px; scrollbar-width:none; }
+        .chips::-webkit-scrollbar { display:none; }
+        .chip { flex:none; min-height:34px; padding:7px 11px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--muted); font-size:10px; }
+        .chip.active { background:rgba(121,184,178,.14); border-color:rgba(121,184,178,.4); color:var(--accent2); }
+        .list { display:flex; flex-direction:column; gap:9px; }
+        .list-item { width:100%; text-align:left; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; }
+        .list-item:active { background:var(--panel2); }
+        .item-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+        .item-title { font-size:13px; font-weight:750; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .item-sub { color:var(--muted); font-size:10px; line-height:1.55; margin-top:5px; overflow-wrap:anywhere; }
+        .item-preview { color:#b2bec7; font-size:11px; line-height:1.55; margin-top:9px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+        .item-foot { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:10px; color:var(--muted); font-size:9px; }
+        .empty,.loading,.error { text-align:center; padding:30px 14px; color:var(--muted); font-size:11px; line-height:1.7; }
+        .error { color:var(--rose); }
+        .notice { padding:10px 12px; border-radius:11px; color:var(--amber); background:rgba(239,194,120,.07); border:1px solid rgba(239,194,120,.16); font-size:10px; line-height:1.5; margin-bottom:10px; }
+        .bottom-nav { position:fixed; left:0; right:0; bottom:0; z-index:40; display:grid; grid-template-columns:repeat(5,1fr); padding:7px 6px calc(7px + env(safe-area-inset-bottom)); background:rgba(15,20,27,.96); backdrop-filter:blur(20px); border-top:1px solid var(--line); }
+        .nav-btn { position:relative; border:0; background:none; color:#758391; min-height:53px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-size:9px; }
+        .nav-btn svg { width:20px; height:20px; }
+        .nav-btn.active { color:var(--accent2); }
+        .nav-count { position:absolute; top:1px; left:calc(50% + 7px); background:var(--rose); color:#241016; border-radius:999px; min-width:16px; height:16px; padding:0 4px; display:grid; place-items:center; font-size:8px; font-weight:900; }
+        .sheet { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.7); backdrop-filter:blur(5px); display:flex; align-items:flex-end; justify-content:center; }
+        .sheet-panel { width:100%; max-width:720px; max-height:92vh; overflow-y:auto; background:#111720; border:1px solid var(--line); border-bottom:0; border-radius:24px 24px 0 0; padding:10px 16px calc(20px + env(safe-area-inset-bottom)); }
+        .sheet-handle { width:38px; height:4px; background:rgba(255,255,255,.15); border-radius:99px; margin:0 auto 13px; }
+        .sheet-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+        .close { width:34px; height:34px; border-radius:11px; border:1px solid var(--line); background:rgba(255,255,255,.04); color:var(--muted); font-size:20px; }
+        .chat-sheet { padding:0; height:100%; max-height:100%; border-radius:0; border:0; display:flex; flex-direction:column; overflow:hidden; }
+        .chat-head { padding:calc(12px + env(safe-area-inset-top)) 14px 12px; border-bottom:1px solid var(--line); background:#111720; }
+        .chat-head-row { display:flex; align-items:center; gap:11px; }
+        .chat-person { flex:1; min-width:0; }
+        .chat-memory { margin-top:10px; background:rgba(0,0,0,.18); border:1px solid var(--line); border-radius:11px; padding:9px; color:var(--muted); font-size:9px; line-height:1.65; max-height:106px; overflow-y:auto; overflow-wrap:anywhere; }
+        .chat-memory b { color:var(--accent2); font-weight:600; }
+        .chat-thread { flex:1; min-height:0; overflow-y:auto; padding:15px 13px; display:flex; flex-direction:column; gap:13px; }
+        .bubble-row { display:flex; }
+        .bubble-row.out { justify-content:flex-end; }
+        .bubble-wrap { max-width:86%; }
+        .bubble-meta { color:var(--muted); font-size:9px; margin-bottom:5px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+        .bubble-row.out .bubble-meta { justify-content:flex-end; }
+        .bubble { border:1px solid var(--line); background:rgba(255,255,255,.055); border-radius:16px 16px 16px 5px; padding:10px 12px; color:#e7eef2; font-size:12px; line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere; }
+        .bubble-row.out .bubble { background:rgba(121,184,178,.17); border-color:rgba(121,184,178,.28); border-radius:16px 16px 5px 16px; color:#dcf3ef; }
+        .bubble-reason { color:var(--muted); font-size:9px; margin-top:5px; line-height:1.5; }
+        .chat-compose { padding:10px 12px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:#111720; display:flex; align-items:flex-end; gap:8px; }
+        .chat-compose .textarea { min-height:44px; max-height:110px; resize:none; }
+        .chat-compose .btn { flex:none; min-height:44px; }
+        .segment { display:grid; grid-template-columns:repeat(4,1fr); background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:4px; margin-bottom:13px; }
+        .segment button { border:0; background:none; color:var(--muted); border-radius:9px; padding:8px 3px; font-size:10px; }
+        .segment button.active { background:rgba(121,184,178,.17); color:var(--accent2); font-weight:700; }
+        .switch { position:relative; width:42px; height:24px; flex:none; }
+        .switch input { opacity:0; width:0; height:0; }
+        .slider { position:absolute; inset:0; border-radius:99px; background:rgba(255,255,255,.12); transition:.2s; }
+        .slider:before { content:""; position:absolute; width:18px; height:18px; left:3px; top:3px; border-radius:50%; background:white; transition:.2s; }
+        .switch input:checked + .slider { background:var(--accent); }
+        .switch input:checked + .slider:before { transform:translateX(18px); }
+        .photo-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:9px; }
+        .photo { background:rgba(0,0,0,.18); border:1px solid var(--line); border-radius:13px; overflow:hidden; }
+        .photo img { display:block; width:100%; aspect-ratio:1.25; object-fit:cover; background:#090c10; }
+        .photo-body { padding:9px; }
+        .settings-group { margin-bottom:10px; }
+        .settings-group summary { cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+        .settings-group summary::-webkit-details-marker { display:none; }
+        .settings-fields { border-top:1px solid var(--line); margin-top:13px; padding-top:13px; }
+        .toast { position:fixed; z-index:100; left:50%; bottom:calc(86px + env(safe-area-inset-bottom)); transform:translate(-50%,12px); max-width:calc(100% - 32px); padding:11px 15px; border-radius:12px; background:#21322f; border:1px solid rgba(121,184,178,.35); color:#e5f4f1; box-shadow:0 12px 35px rgba(0,0,0,.35); font-size:11px; opacity:0; pointer-events:none; transition:.2s; text-align:center; }
+        .toast.show { opacity:1; transform:translate(-50%,0); }
+        .toast.err { background:#351d25; border-color:rgba(240,163,181,.35); color:#ffdbe4; }
+        .divider { height:1px; background:var(--line); margin:13px 0; }
+        .mono { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+        .muted { color:var(--muted); }
+        .accent { color:var(--accent2); }
+        .rose { color:var(--rose); }
+        .green { color:var(--green); }
+        .amber { color:var(--amber); }
+        @media (prefers-reduced-motion:reduce) { .page { animation:none; } * { scroll-behavior:auto !important; } }
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <div class="brand"><div class="brand-mark">ZS</div><div><div class="brand-name">ZERO STUDIO</div><div id="headerSubtitle" class="brand-sub">手机中控台</div></div></div>
+        <button class="icon-btn" onclick="refreshCurrent()" aria-label="刷新当前页面"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 11a8 8 0 10-2.34 5.66M20 4v7h-7"/></svg></button>
+    </header>
+
+    <main>
+        <section id="page-home" class="page">
+            <div class="card hero">
+                <div class="hero-label">Operations dashboard</div>
+                <div class="hero-title">今天的工作，<br>从这里开始。</div>
+                <div class="hero-copy">订单、客户对话、AI 回复和后期交付都在同一个手机中控台里。</div>
+                <button class="hero-action" onclick="openNeedsReply()"><span id="heroNeeds">读取待回复消息</span><span>→</span></button>
+            </div>
+            <div id="homeError" class="notice" hidden></div>
+            <div class="grid4">
+                <div class="metric"><div id="kpiAll" class="metric-value">--</div><div class="metric-label">全部订单</div></div>
+                <div class="metric"><div id="kpiBooked" class="metric-value accent">--</div><div class="metric-label">待拍订单</div></div>
+                <div class="metric"><div id="kpiReview" class="metric-value amber">--</div><div class="metric-label">待终审</div></div>
+                <div class="metric"><div id="kpiDelivered" class="metric-value green">--</div><div class="metric-label">已交付</div></div>
+            </div>
+            <div class="card">
+                <div class="card-head"><h2>系统与客服通道</h2><span id="homeSync" class="badge">同步中</span></div>
+                <div id="healthGrid" class="status-grid"><div class="loading">正在检测服务状态...</div></div>
+                <div class="divider"></div>
+                <div class="item-top"><div><div class="item-title">PC 微信自动客服</div><div id="wxSummary" class="item-sub">正在读取微信状态...</div></div><span id="wxBadge" class="badge">--</span></div>
+                <div class="btn-row" style="margin-top:12px"><button id="wxToggle" class="btn primary" onclick="toggleWxMonitor()">开启监控</button><button class="btn" onclick="testWxSend()">测试发送</button></div>
+            </div>
+            <div class="card">
+                <div class="card-head"><h2>需要回复</h2><button class="text-btn" onclick="openNeedsReply()">查看全部</button></div>
+                <div id="homeNeedsList" class="list"><div class="loading">正在读取客户消息...</div></div>
+            </div>
+            <div class="card">
+                <div class="card-head"><h2>最近订单</h2><button class="text-btn" onclick="switchTab('orders')">订单管理</button></div>
+                <div id="homeOrders" class="list"><div class="loading">正在读取订单...</div></div>
+            </div>
+        </section>
+
+        <section id="page-orders" class="page" hidden>
+            <div class="page-head"><div><h1>订单管理</h1><div class="sub">查看、搜索并编辑客户预约与选图信息</div></div><button class="text-btn" onclick="loadOrders()">刷新</button></div>
+            <div class="search"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="orderSearch" class="input" placeholder="搜索 CN、角色、漫展或微信" oninput="renderOrders()"></div>
+            <div id="orderFilters" class="chips">
+                <button class="chip active" data-order-filter="ALL" onclick="setOrderFilter('ALL')">全部</button><button class="chip" data-order-filter="BOOKED" onclick="setOrderFilter('BOOKED')">已预约</button><button class="chip" data-order-filter="SELECTED" onclick="setOrderFilter('SELECTED')">已选图</button><button class="chip" data-order-filter="REVIEW_PENDING" onclick="setOrderFilter('REVIEW_PENDING')">待终审</button><button class="chip" data-order-filter="DELIVERED" onclick="setOrderFilter('DELIVERED')">已交付</button>
+            </div>
+            <div id="ordersList" class="list"><div class="loading">正在读取订单...</div></div>
+        </section>
+
+        <section id="page-messages" class="page" hidden>
+            <div class="page-head"><div><h1>消息中心</h1><div class="sub">全部入站、已回复、未回复与无需回复档案</div></div><button id="messageRefresh" class="text-btn" onclick="loadMessages()">刷新</button></div>
+            <div class="grid4">
+                <button class="metric" data-message-filter="all" onclick="setMessageFilter('all')"><div id="msgStatAll" class="metric-value">--</div><div class="metric-label">全部联系人</div></button>
+                <button class="metric" data-message-filter="needs_reply" onclick="setMessageFilter('needs_reply')"><div id="msgStatNeeds" class="metric-value rose">--</div><div class="metric-label">需要回复</div></button>
+                <button class="metric" data-message-filter="replied" onclick="setMessageFilter('replied')"><div id="msgStatReplied" class="metric-value green">--</div><div class="metric-label">已回复</div></button>
+                <button class="metric" data-message-filter="no_reply" onclick="setMessageFilter('no_reply')"><div id="msgStatNoReply" class="metric-value muted">--</div><div class="metric-label">无需回复</div></button>
+            </div>
+            <div class="search"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="messageSearch" class="input" placeholder="昵称、名字、CN、备注或消息内容" oninput="onMessageSearch()"></div>
+            <div id="messageErrors" class="notice" hidden></div>
+            <div id="messagesList" class="list"><div class="loading">正在读取消息档案...</div></div>
+        </section>
+
+        <section id="page-studio" class="page" hidden>
+            <div class="page-head"><div><h1>工作室管理</h1><div class="sub">套餐、档期、官网与后期交付</div></div><button class="text-btn" onclick="loadStudioPanel()">刷新</button></div>
+            <div class="segment"><button id="studio-tab-services" class="active" onclick="switchStudio('services')">服务套餐</button><button id="studio-tab-events" onclick="switchStudio('events')">活动档期</button><button id="studio-tab-site" onclick="switchStudio('site')">官网作品</button><button id="studio-tab-jobs" onclick="switchStudio('jobs')">后期交付</button></div>
+            <div id="studio-services"><div class="card"><div class="card-head"><h2>客户服务卡片</h2><button class="text-btn" onclick="saveServices()">保存全部</button></div><div id="servicesEditor"><div class="loading">正在读取服务...</div></div></div></div>
+            <div id="studio-events" hidden><div class="card"><div class="card-head"><h2>活动与漫展档期</h2><button class="text-btn" onclick="addEvent()">新增活动</button></div><div class="field"><label>每个时段容量</label><input id="slotCapacity" type="number" min="1" class="input"></div><div id="eventsEditor"><div class="loading">正在读取档期...</div></div><button class="btn primary block" onclick="saveEvents()">保存全部档期</button></div></div>
+            <div id="studio-site" hidden>
+                <div class="card"><div class="card-head"><h2>官网公告</h2><button class="text-btn" onclick="saveNotice()">保存公告</button></div><textarea id="siteNotice" class="textarea" rows="3" placeholder="显示在客户官网的公告"></textarea></div>
+                <div class="card"><div class="card-head"><h2>上传作品例图</h2></div><div class="field"><label>作品标题</label><input id="photoTitle" class="input" placeholder="例：BACC 场照精选"></div><div class="field"><label>分类</label><select id="photoCategory" class="select"><option>场照</option><option>外景</option><option>棚拍</option><option>合成</option></select></div><input id="photoFile" type="file" accept="image/*" class="input" style="margin-bottom:10px"><button class="btn primary block" onclick="uploadPhoto()">上传到官网作品墙</button></div>
+                <div class="card"><div class="card-head"><h2>已展示作品</h2><span id="photoCount" class="badge">--</span></div><div id="photosGrid" class="photo-grid"><div class="loading">正在读取作品...</div></div></div>
+                <div class="card"><div class="card-head"><h2>官网客户留言</h2></div><div id="siteMessages" class="list"><div class="loading">正在读取留言...</div></div></div>
+            </div>
+            <div id="studio-jobs" hidden>
+                <div class="card"><div class="card-head"><div><h2>成片终审与交付</h2><div class="sub">确认成片后直接将交付链接推送给客户</div></div><button class="text-btn" onclick="runRetouchOnce()">扫一次队列</button></div><div id="reviewList" class="list"><div class="loading">正在读取终审队列...</div></div></div>
+                <div class="card"><div class="card-head"><h2>待修图订单</h2><span id="pendingCount" class="badge">--</span></div><div id="pendingRetouch" class="list"><div class="loading">正在读取待修订单...</div></div></div>
+                <div class="card"><div class="card-head"><h2>后台任务</h2><button class="text-btn" onclick="loadJobs()">刷新任务</button></div><div id="jobsList" class="list"><div class="loading">正在读取任务...</div></div></div>
+            </div>
+        </section>
+
+        <section id="page-settings" class="page" hidden>
+            <div class="page-head"><div><h1>系统设置</h1><div class="sub">真实配置、连通性测试与账户管理</div></div><button class="text-btn" onclick="loadSettings()">刷新</button></div>
+            <div class="card"><div class="item-top"><div><div class="item-title">当前管理员</div><div id="settingsUser" class="item-sub">--</div></div><span class="badge replied">已登录</span></div><div class="btn-row" style="margin-top:12px"><a class="btn" href="/" target="_blank">桌面完整控制台</a><button class="btn danger" onclick="logout()">退出登录</button></div></div>
+            <div class="card"><div class="card-head"><div><h2>环境与服务配置</h2><div class="sub">只提交修改过的字段，脱敏密钥不会被覆盖</div></div><button id="settingsSave" class="text-btn" onclick="saveSettings()">保存修改</button></div><div id="settingsGroups"><div class="loading">正在读取系统配置...</div></div></div>
+        </section>
+    </main>
+
+    <nav class="bottom-nav">
+        <button class="nav-btn active" data-tab="home" onclick="switchTab('home')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h14V10M9 20v-6h6v6"/></svg><span>工作台</span></button>
+        <button class="nav-btn" data-tab="orders" onclick="switchTab('orders')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M6 3h12v18H6zM9 7h6M9 11h6M9 15h4"/></svg><span>订单</span></button>
+        <button class="nav-btn" data-tab="messages" onclick="switchTab('messages')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 4h16v13H9l-5 4zM8 9h8M8 13h5"/></svg><span>消息</span><span id="navMessageCount" class="nav-count" hidden>0</span></button>
+        <button class="nav-btn" data-tab="studio" onclick="switchTab('studio')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3M4 12h16M10 12v2h4v-2"/></svg><span>工作室</span></button>
+        <button class="nav-btn" data-tab="settings" onclick="switchTab('settings')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0015 19.4a1.7 1.7 0 00-1 .6 1.7 1.7 0 00-.4 1.1V21h-4v-.09A1.7 1.7 0 008.6 19.4a1.7 1.7 0 00-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 004.6 15a1.7 1.7 0 00-1.6-1H3v-4h.09A1.7 1.7 0 004.6 9a1.7 1.7 0 00-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 009 4.6a1.7 1.7 0 001-1.6V3h4v.09A1.7 1.7 0 0015 4.6a1.7 1.7 0 001.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0019.4 9a1.7 1.7 0 001.6 1h.09v4H21a1.7 1.7 0 00-1.6 1z"/></svg><span>设置</span></button>
+    </nav>
+
+    <div id="orderSheet" class="sheet" hidden onclick="if(event.target===this)closeOrder()"><div class="sheet-panel"><div class="sheet-handle"></div><div class="sheet-head"><div><h2 id="orderTitle">订单详情</h2><div id="orderSubtitle" class="sub"></div></div><button class="close" onclick="closeOrder()">×</button></div>
+        <div class="field-row"><div class="field"><label>客户 CN</label><input id="orderCn" class="input"></div><div class="field"><label>拍摄角色</label><input id="orderCharacter" class="input"></div></div>
+        <div class="field-row"><div class="field"><label>预约日期</label><input id="orderDate" class="input"></div><div class="field"><label>拍摄时段</label><input id="orderTime" class="input"></div></div>
+        <div class="field"><label>备注信息</label><textarea id="orderRemarks" class="textarea"></textarea></div>
+        <div class="field"><label>客户选图链接</label><input id="orderGallery" class="input mono" readonly></div>
+        <div class="btn-row" style="margin-bottom:10px"><button class="btn" onclick="copyActiveGallery()">复制选图链接</button><button class="btn" onclick="toggleOrderQr()">预约二维码</button></div>
+        <div id="orderQrWrap" hidden style="background:white;border-radius:14px;padding:12px;width:190px;margin:0 auto 12px"><img id="orderQr" alt="订单场记二维码" style="width:100%;display:block"></div>
+        <button id="orderSave" class="btn primary block" onclick="saveOrder()">保存订单修改</button>
+    </div></div>
+
+    <div id="chatSheet" class="sheet" hidden><div class="sheet-panel chat-sheet">
+        <div class="chat-head"><div class="chat-head-row"><button class="close" onclick="closeChat()">‹</button><div class="chat-person"><div style="display:flex;align-items:center;gap:7px"><h2 id="chatName">联系人</h2><span id="chatStatus" class="badge">--</span></div><div id="chatIdentity" class="sub"></div></div><button class="icon-btn" onclick="refreshChat()" aria-label="刷新会话"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.34 5.66M20 4v7h-7"/></svg></button></div><div id="chatMemory" class="chat-memory">正在读取自动备注与数据库上下文...</div></div>
+        <div id="chatOlderWrap" style="padding:8px 12px 0" hidden><button id="chatOlder" class="btn block" onclick="loadOlderChat()">加载更早消息</button></div>
+        <div id="chatThread" class="chat-thread"><div class="loading">正在读取完整聊天记录...</div></div>
+        <div class="chat-compose"><textarea id="chatReply" class="textarea" rows="1" placeholder="输入人工回复..." onkeydown="if(event.ctrlKey&&event.key==='Enter')sendChatReply()"></textarea><button id="chatSend" class="btn primary" onclick="sendChatReply()">发送</button></div>
+    </div></div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const state = {
+            tab:'home', studio:'services', bookings:[], orderFilter:'ALL', activeOrder:null, wxRunning:false,
+            homeNeeds:[], services:[], events:[], settings:[], settingsBaseline:{},
+            messages:{filter:'all', query:'', items:[], active:null, detail:null, searchTimer:null, listId:0, detailId:0},
+        };
+        const STATUS_ZH = { BOOKED:'已预约', SHOT:'已拍摄', CLUSTERED:'已分拣', SELECTED:'已选图', RETOUCHING:'修图中', REVIEW_PENDING:'待终审', DELIVERED:'已交付' };
+        const MSG_ZH = { needs_reply:'需要回复', replied:'已回复', no_reply:'无需回复' };
+        const esc = value => String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        const msgKey = item => `${item?.source || 'wechat'}:${item?.platform || ''}:${item?.chat_id || ''}`;
+        const fmtTime = ts => ts ? new Date(Number(ts)*1000).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}) : '--';
+        const empty = (text,cls='empty') => `<div class="${cls}">${esc(text)}</div>`;
+        const badge = (status,text) => `<span class="badge ${esc(status)}">${esc(text || MSG_ZH[status] || STATUS_ZH[status] || status || '--')}</span>`;
+        let toastTimer;
+        function toast(message,type='ok') { const el=document.getElementById('toast'); clearTimeout(toastTimer); el.textContent=message; el.className=`toast ${type==='err'?'err':''} show`; toastTimer=setTimeout(()=>el.classList.remove('show'),2800); }
+        async function api(path,options={}) {
+            const headers={...(options.headers||{})};
+            if(options.body && !(options.body instanceof FormData) && !headers['Content-Type']) headers['Content-Type']='application/json';
+            const response=await fetch(path,{cache:'no-store',credentials:'same-origin',...options,headers});
+            if(response.status===401){ location.href='/login?next=/mobile'; throw new Error('登录已过期'); }
+            const data=await response.json().catch(()=>({}));
+            if(!response.ok) throw new Error(data.detail || data.message || `请求失败 (${response.status})`);
+            return data;
+        }
+        async function copyText(text) {
+            if(!text) return toast('当前没有可复制的链接','err');
+            try { await navigator.clipboard.writeText(text); }
+            catch { const el=document.createElement('textarea'); el.value=text; document.body.appendChild(el); el.select(); document.execCommand('copy'); el.remove(); }
+            toast('链接已复制');
+        }
+        function orderItem(b) {
+            return `<button class="list-item" data-order-id="${Number(b.id)}"><div class="item-top"><div style="min-width:0"><div class="item-title">#${Number(b.id)} · ${esc(b.cn || '未填 CN')}</div><div class="item-sub accent">${esc(b.character || '未填角色')}</div></div>${badge(b.status)}</div><div class="item-preview">${esc(b.event_name || '未填活动')} · ${esc(b.date || '')} ${esc(b.time || '')}</div><div class="item-foot"><span>${esc((b.platform || 'web').toUpperCase())}</span><span>查看与编辑 →</span></div></button>`;
+        }
+        function bindOrderButtons(root=document) { root.querySelectorAll('[data-order-id]').forEach(btn=>btn.addEventListener('click',()=>openOrder(Number(btn.dataset.orderId)))); }
+        function messageItem(item,index) {
+            const cn=item.session?.slots?.cn;
+            return `<button class="list-item" data-message-index="${index}"><div class="item-top"><div style="min-width:0"><div class="item-title">${esc(item.nickname || item.chat_id)}${cn?` <span class="accent">· CN.${esc(cn)}</span>`:''}</div><div class="item-sub">${item.platform==='wechat'?'微信':esc(item.platform)} · ${esc(item.chat_id)}</div></div>${badge(item.status)}</div><div class="item-preview">${item.last_direction==='out'?'我方：':''}${esc(item.last_message || '暂无消息')}</div><div class="item-foot"><span>${fmtTime(item.last_activity)}</span><span>${item.total_messages || 0} 条${item.needs_reply_count?` · ${item.needs_reply_count} 条待回复`:''}</span></div></button>`;
+        }
+        function bindMessageButtons(root=document) { root.querySelectorAll('[data-message-index]').forEach(btn=>btn.addEventListener('click',()=>openChat(Number(btn.dataset.messageIndex)))); }
+
+        function switchTab(tab) {
+            state.tab=tab;
+            ['home','orders','messages','studio','settings'].forEach(name=>{ document.getElementById(`page-${name}`).hidden=name!==tab; document.querySelector(`[data-tab="${name}"]`).classList.toggle('active',name===tab); });
+            document.getElementById('headerSubtitle').textContent={home:'手机中控台',orders:'订单与客户预约',messages:'完整双向消息档案',studio:'套餐、官网与后期交付',settings:'系统与账户设置'}[tab];
+            window.scrollTo(0,0);
+            if(tab==='home') loadHome();
+            if(tab==='orders') loadOrders();
+            if(tab==='messages') loadMessages();
+            if(tab==='studio') loadStudioPanel();
+            if(tab==='settings') loadSettings();
+        }
+        function refreshCurrent() { switchTab(state.tab); }
+
+        async function loadHome() {
+            document.getElementById('homeSync').textContent='同步中';
+            const results=await Promise.allSettled([api('/api/overview/health'),api('/api/bookings'),api('/api/im/channels/status'),api('/api/im/conversations?status=needs_reply&limit=5')]);
+            const errors=[];
+            if(results[0].status==='fulfilled') renderHealth(results[0].value); else errors.push('系统状态读取失败');
+            if(results[1].status==='fulfilled') { state.bookings=results[1].value.bookings || []; renderBookingMetrics(); renderHomeOrders(); } else errors.push('订单读取失败');
+            if(results[2].status==='fulfilled') renderChannels(results[2].value); else errors.push('客服状态读取失败');
+            if(results[3].status==='fulfilled') { const data=results[3].value; state.homeNeeds=data.items || []; renderHomeNeeds(data); } else errors.push('消息读取失败');
+            const errorBox=document.getElementById('homeError'); errorBox.hidden=!errors.length; errorBox.textContent=errors.join('；');
+            document.getElementById('homeSync').textContent=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false});
+        }
+        function renderHealth(h) {
+            const cells=[['客户官网',h.services?.booking_site?.online],['聊单引擎',h.services?.im_gateway?.online],['显卡加速',h.gpu?.online],['公网访问',h.tunnel?.online]];
+            document.getElementById('healthGrid').innerHTML=cells.map(([label,online])=>`<div class="status-cell"><span class="dot ${online?'ok':'bad'}"></span><span>${label} · ${online?'在线':'离线'}</span></div>`).join('');
+        }
+        function renderBookingMetrics() {
+            const count=status=>state.bookings.filter(b=>b.status===status).length;
+            document.getElementById('kpiAll').textContent=state.bookings.length;
+            document.getElementById('kpiBooked').textContent=count('BOOKED');
+            document.getElementById('kpiReview').textContent=count('REVIEW_PENDING');
+            document.getElementById('kpiDelivered').textContent=count('DELIVERED');
+        }
+        function renderHomeOrders() { const box=document.getElementById('homeOrders'); box.innerHTML=state.bookings.length?state.bookings.slice(0,3).map(orderItem).join(''):empty('暂无订单'); bindOrderButtons(box); }
+        function renderChannels(ch) {
+            const wx=ch.wechat || {}; state.wxRunning=Boolean(wx.monitor_running);
+            const badgeEl=document.getElementById('wxBadge'); badgeEl.textContent=state.wxRunning?'监控中':(wx.online?'已连接':'未连接'); badgeEl.className=`badge ${state.wxRunning||wx.online?'replied':'needs_reply'}`;
+            document.getElementById('wxSummary').textContent=`已处理 ${wx.messages_processed || 0} 条 · 监控群 ${(wx.monitored_groups || []).length} 个 · 最后轮询 ${fmtTime(wx.last_poll_at)}`;
+            const btn=document.getElementById('wxToggle'); btn.textContent=state.wxRunning?'暂停微信监控':'开启微信监控'; btn.className=`btn ${state.wxRunning?'warn':'primary'}`;
+        }
+        function renderHomeNeeds(data) {
+            const needs=Number(data.stats?.needs_reply ?? data.total ?? state.homeNeeds.length);
+            document.getElementById('heroNeeds').textContent=needs?`${needs} 位联系人等待回复`:'暂无待回复消息';
+            const nav=document.getElementById('navMessageCount'); nav.textContent=needs>99?'99+':needs; nav.hidden=!needs;
+            const box=document.getElementById('homeNeedsList');
+            box.innerHTML=state.homeNeeds.length?state.homeNeeds.map((item,i)=>`<button class="list-item" data-home-message="${i}"><div class="item-top"><div class="item-title">${esc(item.nickname || item.chat_id)}</div>${badge('needs_reply')}</div><div class="item-preview">${esc(item.last_message || '')}</div><div class="item-foot"><span>${item.platform==='wechat'?'微信':esc(item.platform)}</span><span>${fmtTime(item.last_activity)}</span></div></button>`).join(''):empty('所有需要回复的消息都已处理');
+            box.querySelectorAll('[data-home-message]').forEach(btn=>btn.addEventListener('click',()=>openHomeMessage(Number(btn.dataset.homeMessage))));
+        }
+        function openNeedsReply() { state.messages.filter='needs_reply'; switchTab('messages'); }
+        async function openHomeMessage(index) {
+            const target=state.homeNeeds[index]; if(!target)return;
+            state.messages.filter='all'; state.messages.query=''; document.getElementById('messageSearch').value=''; switchTab('messages'); await loadMessages();
+            const found=state.messages.items.findIndex(item=>msgKey(item)===msgKey(target)); if(found>=0)openChat(found); else toast('该会话已更新，请在消息中心查看');
+        }
+        async function toggleWxMonitor() {
+            const btn=document.getElementById('wxToggle'); btn.disabled=true;
+            try { const res=await api('/api/im/wechat/monitor',{method:'POST',body:JSON.stringify({action:state.wxRunning?'stop':'start'})}); if(res.error)throw new Error(res.error); toast(state.wxRunning?'微信监控已暂停':'微信监控已开启'); await loadHome(); }
+            catch(err){toast(err.message,'err');} finally{btn.disabled=false;}
+        }
+        async function testWxSend() { try{const res=await api('/api/im/wechat/test-send',{method:'POST',body:JSON.stringify({target:'文件传输助手',text:'ZERO STUDIO 手机中控台连接测试'})}); if(res.error)throw new Error(res.error); toast('测试消息已发送');}catch(err){toast(err.message,'err');} }
+
+        async function loadOrders() { const box=document.getElementById('ordersList'); box.innerHTML='<div class="loading">正在读取订单...</div>'; try{const data=await api('/api/bookings');state.bookings=data.bookings||[];renderBookingMetrics();renderOrders();}catch(err){box.innerHTML=empty(err.message,'error');} }
+        function setOrderFilter(filter) { state.orderFilter=filter; document.querySelectorAll('[data-order-filter]').forEach(btn=>btn.classList.toggle('active',btn.dataset.orderFilter===filter)); renderOrders(); }
+        function renderOrders() {
+            const query=document.getElementById('orderSearch').value.trim().toLowerCase();
+            const list=state.bookings.filter(b=>(state.orderFilter==='ALL'||b.status===state.orderFilter)&&(!query||`${b.cn||''} ${b.character||''} ${b.event_name||''} ${b.wechat||''}`.toLowerCase().includes(query)));
+            const box=document.getElementById('ordersList'); box.innerHTML=list.length?list.map(orderItem).join(''):empty(query?'没有匹配的订单':'当前分类暂无订单'); bindOrderButtons(box);
+        }
+        function openOrder(id) {
+            const b=state.bookings.find(item=>Number(item.id)===id); if(!b)return; state.activeOrder=b;
+            document.getElementById('orderTitle').textContent=`订单 #${b.id} · ${b.cn||'未命名'}`; document.getElementById('orderSubtitle').textContent=`${b.event_name||'-'} · ${STATUS_ZH[b.status]||b.status}`;
+            ['Cn','Character','Date','Time','Remarks'].forEach(name=>{document.getElementById(`order${name}`).value=b[{Cn:'cn',Character:'character',Date:'date',Time:'time',Remarks:'remarks'}[name]]||'';});
+            document.getElementById('orderGallery').value=b.public_gallery_url||''; document.getElementById('orderQr').src=`/api/bookings/${b.id}/slate-qr`; document.getElementById('orderQrWrap').hidden=true; document.getElementById('orderSheet').hidden=false;
+        }
+        function closeOrder(){document.getElementById('orderSheet').hidden=true;state.activeOrder=null;}
+        function toggleOrderQr(){const wrap=document.getElementById('orderQrWrap');wrap.hidden=!wrap.hidden;}
+        function copyActiveGallery(){copyText(document.getElementById('orderGallery').value);}
+        async function saveOrder() {
+            const b=state.activeOrder;if(!b)return;const btn=document.getElementById('orderSave');btn.disabled=true;
+            try{await api('/api/site/bookings/edit',{method:'POST',body:JSON.stringify({id:b.id,wechat:b.wechat||'',cn:document.getElementById('orderCn').value,character:document.getElementById('orderCharacter').value,date:document.getElementById('orderDate').value,time:document.getElementById('orderTime').value,deposit:b.deposit||'',quantity:b.quantity||1,remarks:document.getElementById('orderRemarks').value})});toast('订单修改已保存');closeOrder();await loadOrders();}catch(err){toast(err.message,'err');}finally{btn.disabled=false;}
+        }
+
+        function onMessageSearch(){clearTimeout(state.messages.searchTimer);state.messages.searchTimer=setTimeout(()=>{state.messages.query=document.getElementById('messageSearch').value.trim();loadMessages();},280);}
+        function setMessageFilter(filter){state.messages.filter=filter;document.querySelectorAll('[data-message-filter]').forEach(btn=>btn.classList.toggle('active',btn.dataset.messageFilter===filter));loadMessages();}
+        async function loadMessages() {
+            const m=state.messages,id=++m.listId,box=document.getElementById('messagesList'),refresh=document.getElementById('messageRefresh');refresh.textContent='同步中';
+            if(!m.items.length)box.innerHTML='<div class="loading">正在读取消息档案...</div>';
+            try{
+                const params=new URLSearchParams({status:m.filter,q:m.query,limit:'300'}),data=await api(`/api/im/conversations?${params}`);if(id!==m.listId)return;
+                m.items=data.items||[];const stats=data.stats||{};
+                document.getElementById('msgStatAll').textContent=stats.total??m.items.length;document.getElementById('msgStatNeeds').textContent=stats.needs_reply??0;document.getElementById('msgStatReplied').textContent=stats.replied??0;document.getElementById('msgStatNoReply').textContent=stats.no_reply??0;
+                if(!m.query){const needs=Number(stats.needs_reply||0),nav=document.getElementById('navMessageCount');nav.textContent=needs>99?'99+':needs;nav.hidden=!needs;document.getElementById('heroNeeds').textContent=needs?`${needs} 位联系人等待回复`:'暂无待回复消息';}
+                document.querySelectorAll('[data-message-filter]').forEach(btn=>btn.classList.toggle('active',btn.dataset.messageFilter===m.filter));
+                const errors=data.errors||[],errorBox=document.getElementById('messageErrors');errorBox.hidden=!errors.length;errorBox.textContent=errors.map(e=>`${e.source==='wechat'?'微信网关':'本地网关'}：${e.error}`).join('；');
+                box.innerHTML=m.items.length?m.items.map(messageItem).join(''):empty(m.query?'没有找到匹配的昵称、备注或消息':'当前分类暂无会话');bindMessageButtons(box);
+                if(m.active){const current=m.items.find(item=>msgKey(item)===msgKey(m.active));if(current){m.active={...m.active,...current};if(m.detail)renderChatHeader();}}
+            }catch(err){if(id===m.listId)box.innerHTML=empty(err.message,'error');}finally{if(id===m.listId)refresh.textContent='刷新';}
+        }
+        async function openChat(index) {
+            const item=state.messages.items[index];if(!item)return;const m=state.messages;m.active={...item};m.detail=null;document.getElementById('chatSheet').hidden=false;document.body.style.overflow='hidden';renderChatHeader();document.getElementById('chatMemory').textContent='正在读取自动备注与数据库上下文...';document.getElementById('chatThread').innerHTML='<div class="loading">正在读取完整聊天记录...</div>';document.getElementById('chatOlderWrap').hidden=true;await refreshChat();
+        }
+        function closeChat(){document.getElementById('chatSheet').hidden=true;document.body.style.overflow='';state.messages.detailId++;state.messages.active=null;state.messages.detail=null;loadMessages();}
+        async function refreshChat() {
+            const m=state.messages,active=m.active;if(!active)return;const id=++m.detailId,key=msgKey(active);
+            try{const params=new URLSearchParams({source:active.source||'wechat',platform:active.platform,chat_id:active.chat_id,limit:'500'}),data=await api(`/api/im/conversations/detail?${params}`);if(id!==m.detailId||!m.active||msgKey(m.active)!==key)return;m.active={...m.active,...(data.conversation||{}),source:active.source||'wechat'};m.detail=data;renderChat(true);}catch(err){if(id===m.detailId)document.getElementById('chatThread').innerHTML=empty(err.message,'error');}
+        }
+        function renderChatHeader() {
+            const m=state.messages,a=m.active;if(!a)return;document.getElementById('chatName').textContent=a.nickname||a.chat_id;document.getElementById('chatStatus').outerHTML=badge(a.status).replace('class="badge','id="chatStatus" class="badge');document.getElementById('chatIdentity').textContent=`${a.platform==='wechat'?'微信':a.platform} · ${a.chat_type==='group'?'群聊':'私聊'} · ${a.chat_id}`;
+            const session=m.detail?.conversation?.session||a.session||{},slots=session.slots||{},labels={cn:'CN',character:'角色',event_name:'活动',date:'日期',time:'时段',remarks:'备注'};
+            const details=Object.entries(labels).filter(([key])=>slots[key]).map(([key,label])=>`${label}：${slots[key]}`).join(' · ')||'暂未识别 CN、角色或档期';
+            document.getElementById('chatMemory').innerHTML=`<b>自动备注</b> ${esc(session.auto_remark||'尚未生成')}<br><b>数据库上下文 v${session.version||0}</b> ${esc(details)}${session.booking?`<br><b>预约</b> ${esc(JSON.stringify(session.booking))}`:''}`;
+        }
+        function renderChat(scrollBottom=false) {
+            renderChatHeader();const detail=state.messages.detail,messages=detail?.messages||[],box=document.getElementById('chatThread');
+            box.innerHTML=messages.length?messages.map(msg=>{const incoming=msg.direction==='in',images=(msg.images||[]).map(src=>`<div class="bubble-reason" title="${esc(src)}">[图片] ${esc(src)}</div>`).join('');return `<div class="bubble-row ${incoming?'in':'out'}"><div class="bubble-wrap"><div class="bubble-meta"><span>${incoming?esc(msg.nickname||'客户'):'我方'} · ${fmtTime(msg.created_at)}</span>${incoming?badge(msg.status):`<span>${({MANUAL_REPLY:'人工回复',GALLERY_NOTIFICATION:'选图通知',DELIVERY_NOTIFICATION:'交付通知'})[msg.action]||'系统 / AI 回复'}</span>`}</div><div class="bubble">${esc(msg.text||(msg.images?.length?'':'[空消息]'))}${images}</div>${msg.reason?`<div class="bubble-reason">${esc(msg.action||'')} · ${esc(msg.reason)}</div>`:''}</div></div>`;}).join(''):empty('该联系人暂无消息档案');
+            document.getElementById('chatOlderWrap').hidden=!detail?.has_more;if(scrollBottom)requestAnimationFrame(()=>box.scrollTop=box.scrollHeight);
+        }
+        async function loadOlderChat() {
+            const m=state.messages,a=m.active,d=m.detail;if(!a||!d?.has_more||!d.next_before_id)return;const btn=document.getElementById('chatOlder');btn.disabled=true;
+            try{const params=new URLSearchParams({source:a.source||'wechat',platform:a.platform,chat_id:a.chat_id,limit:'500',before_id:String(d.next_before_id)}),data=await api(`/api/im/conversations/detail?${params}`),box=document.getElementById('chatThread'),oldHeight=box.scrollHeight;d.messages=[...(data.messages||[]),...d.messages];d.has_more=data.has_more;d.next_before_id=data.next_before_id;renderChat(false);box.scrollTop=box.scrollHeight-oldHeight;}catch(err){toast(err.message,'err');}finally{btn.disabled=false;}
+        }
+        async function sendChatReply() {
+            const m=state.messages,a=m.active,input=document.getElementById('chatReply'),text=input.value.trim();if(!a||!text)return toast('请填写回复内容','err');const btn=document.getElementById('chatSend');btn.disabled=true;btn.textContent='发送中';
+            try{await api('/api/im/conversations/reply',{method:'POST',body:JSON.stringify({source:a.source||'wechat',platform:a.platform,chat_id:a.chat_id,chat_type:a.chat_type||'private',group_id:a.group_id||'',user_id:a.user_id||a.chat_id,nickname:a.nickname||'',text})});input.value='';toast('回复已发送并归档');await refreshChat();await loadMessages();}catch(err){toast(err.message,'err');}finally{btn.disabled=false;btn.textContent='发送';}
+        }
+
+        function switchStudio(panel){state.studio=panel;['services','events','site','jobs'].forEach(name=>{document.getElementById(`studio-${name}`).hidden=name!==panel;document.getElementById(`studio-tab-${name}`).classList.toggle('active',name===panel);});loadStudioPanel();}
+        function loadStudioPanel(){if(state.studio==='services')loadServices();if(state.studio==='events')loadEvents();if(state.studio==='site')loadSite();if(state.studio==='jobs')loadJobs();}
+        async function loadServices(){const box=document.getElementById('servicesEditor');box.innerHTML='<div class="loading">正在读取服务...</div>';try{const data=await api('/api/site/services');state.services=data.services||[];renderServices();}catch(err){box.innerHTML=empty(err.message,'error');}}
+        function renderServices(){document.getElementById('servicesEditor').innerHTML=state.services.map((s,i)=>`<div class="card" style="background:rgba(0,0,0,.16);margin-bottom:10px"><div class="card-head"><h2>${esc(s.title||`服务 ${i+1}`)}</h2><label style="display:flex;align-items:center;gap:7px;font-size:10px;color:var(--muted)">上架<span class="switch"><input type="checkbox" data-service="${i}" data-field="hidden" ${s.hidden?'':'checked'}><span class="slider"></span></span></label></div><div class="field-row"><div class="field"><label>标题</label><input class="input" data-service="${i}" data-field="title" value="${esc(s.title)}"></div><div class="field"><label>徽标</label><input class="input" data-service="${i}" data-field="badge" value="${esc(s.badge)}"></div></div>${s.priceMode==='dual'?`<div class="field-row"><div class="field"><label>地区 A / 价格</label><input class="input" data-service="${i}" data-field="region_a" value="${esc(s.region_a)}"><input class="input" style="margin-top:6px" data-service="${i}" data-field="price_a" value="${esc(s.price_a)}"></div><div class="field"><label>地区 B / 价格</label><input class="input" data-service="${i}" data-field="region_b" value="${esc(s.region_b)}"><input class="input" style="margin-top:6px" data-service="${i}" data-field="price_b" value="${esc(s.price_b)}"></div></div>`:`<div class="field-row"><div class="field"><label>价格</label><input class="input" data-service="${i}" data-field="price" value="${esc(s.price)}"></div><div class="field"><label>单位</label><input class="input" data-service="${i}" data-field="unit" value="${esc(s.unit)}"></div></div>`}<div class="field"><label>卖点（每行一条）</label><textarea class="textarea" data-service="${i}" data-field="features">${esc((s.features||[]).join('\n'))}</textarea></div><div class="field"><label>按钮文案</label><input class="input" data-service="${i}" data-field="cta" value="${esc(s.cta)}"></div></div>`).join('')||empty('暂无服务卡片');}
+        async function saveServices(){const services=state.services.map(s=>({...s}));document.querySelectorAll('[data-service]').forEach(el=>{const s=services[Number(el.dataset.service)],field=el.dataset.field;if(!s)return;if(field==='hidden')s.hidden=!el.checked;else if(field==='features')s.features=el.value.split('\n').map(v=>v.trim()).filter(Boolean);else s[field]=el.value.trim();});try{await api('/api/site/services',{method:'POST',body:JSON.stringify({services})});toast('服务套餐已更新');await loadServices();}catch(err){toast(err.message,'err');}}
+        async function loadEvents(){const box=document.getElementById('eventsEditor');box.innerHTML='<div class="loading">正在读取档期...</div>';try{const data=await api('/api/site/events');state.events=data.events||[];document.getElementById('slotCapacity').value=data.slot_capacity||1;renderEvents();}catch(err){box.innerHTML=empty(err.message,'error');}}
+        function renderEvents(){document.getElementById('eventsEditor').innerHTML=state.events.map((ev,i)=>`<div class="card" style="background:rgba(0,0,0,.16)"><div class="card-head"><div>${ev.locked?badge('REVIEW_PENDING','锁档中'):badge('replied','开放预约')} ${ev.archived?badge('no_reply','已归档'):''}</div><button class="text-btn rose" onclick="removeEvent(${i})">删除</button></div><div class="field"><label>活动名称</label><input class="input" data-event="${i}" data-field="name" value="${esc(ev.name)}"></div><div class="field"><label>日期（逗号分隔）</label><input class="input" data-event="${i}" data-field="dates" value="${esc(ev.dates)}"></div><div class="field"><label>时段（逗号分隔）</label><input class="input" data-event="${i}" data-field="times" value="${esc(ev.times)}"></div><div class="field"><label>锁档说明</label><input class="input" data-event="${i}" data-field="note" value="${esc(ev.note||'')}"></div><div class="btn-row"><label class="btn" style="display:flex;align-items:center;justify-content:space-between">锁档<span class="switch"><input type="checkbox" data-event="${i}" data-field="locked" ${ev.locked?'checked':''}><span class="slider"></span></span></label><label class="btn" style="display:flex;align-items:center;justify-content:space-between">归档<span class="switch"><input type="checkbox" data-event="${i}" data-field="archived" ${ev.archived?'checked':''}><span class="slider"></span></span></label></div></div>`).join('')||empty('暂无活动，点击上方新增活动');}
+        function addEvent(){state.events.push({name:'新漫展企划',dates:'',times:'10:00-12:00,14:00-16:00',locked:false,archived:false,note:''});renderEvents();}
+        function removeEvent(index){if(confirm('确认删除这个活动？已有订单不会删除。')){state.events.splice(index,1);renderEvents();}}
+        async function saveEvents(){const events=state.events.map(ev=>({...ev}));document.querySelectorAll('[data-event]').forEach(el=>{const ev=events[Number(el.dataset.event)];if(ev)ev[el.dataset.field]=el.type==='checkbox'?el.checked:el.value.trim();});try{await api('/api/site/events',{method:'POST',body:JSON.stringify({events,slot_capacity:Number(document.getElementById('slotCapacity').value)||1})});toast('活动档期已保存');await loadEvents();}catch(err){toast(err.message,'err');}}
+        async function loadSite(){try{const data=await api('/api/site/summary');document.getElementById('siteNotice').value=data.settings?.notice||'';renderPhotos(data.photos||[]);const messages=data.messages||[];document.getElementById('siteMessages').innerHTML=messages.length?messages.map(m=>`<div class="list-item"><div class="item-top"><div class="item-title">${esc(m.name)}</div><span class="badge">${esc(m.contact)}</span></div><div class="item-preview">${esc(m.content)}</div></div>`).join(''):empty('暂无官网留言');}catch(err){toast(err.message,'err');}}
+        function renderPhotos(photos){document.getElementById('photoCount').textContent=`${photos.length} 张`;const box=document.getElementById('photosGrid');box.innerHTML=photos.length?photos.map(p=>`<div class="photo"><img src="/api/proxy${esc(p.url)}" alt="${esc(p.title||'作品例图')}" loading="lazy"><div class="photo-body"><div class="item-title">${esc(p.title||'未命名')}</div><select class="select" style="margin-top:7px" onchange="updatePhotoLocation(${Number(p.id)},this.value)">${['双端展示','首页画廊','个人档案'].map(v=>`<option ${p.display_location===v?'selected':''}>${v}</option>`).join('')}</select></div></div>`).join(''):empty('暂无作品例图');}
+        async function uploadPhoto(){const file=document.getElementById('photoFile').files[0];if(!file)return toast('请先选择图片','err');const form=new FormData();form.append('photo',file);form.append('title',document.getElementById('photoTitle').value);form.append('category',document.getElementById('photoCategory').value);form.append('display_location','双端展示');try{await api('/api/site/upload-photo',{method:'POST',body:form});toast('作品已上传');document.getElementById('photoFile').value='';document.getElementById('photoTitle').value='';await loadSite();}catch(err){toast(err.message,'err');}}
+        async function updatePhotoLocation(id,display_location){try{await api('/api/site/update-photo',{method:'POST',body:JSON.stringify({id,display_location})});toast('展示位置已更新');}catch(err){toast(err.message,'err');}}
+        async function saveNotice(){try{await api('/api/site/settings',{method:'POST',body:JSON.stringify({notice:document.getElementById('siteNotice').value.trim()})});toast('官网公告已更新');}catch(err){toast(err.message,'err');}}
+        async function loadJobs(){const reviewBox=document.getElementById('reviewList');reviewBox.innerHTML='<div class="loading">正在读取终审队列...</div>';try{const [queue,jobs]=await Promise.all([api('/api/retouch/review-queue'),api('/api/jobs')]);const reviews=queue.review_bookings||[],pending=queue.pending_retouch||[];reviewBox.innerHTML=reviews.length?reviews.map(b=>`<div class="list-item"><div class="item-top"><div><div class="item-title">#${b.id} · ${esc(b.cn)}</div><div class="item-sub">${esc(b.character||'')} · ${(b.jobs||[]).length} 个修图任务</div></div>${badge(b.status)}</div><div class="btn-row" style="margin-top:11px">${b.status==='REVIEW_PENDING'?`<button class="btn primary" onclick="approveOrder(${Number(b.id)})">审核放行并推送客户</button>`:''}${b.delivery_url?`<a class="btn" href="${esc(b.delivery_url)}" target="_blank">查看交付页</a>`:''}</div></div>`).join(''):empty('当前没有待终审订单');document.getElementById('pendingCount').textContent=`${pending.length} 单`;document.getElementById('pendingRetouch').innerHTML=pending.length?pending.map(b=>`<div class="list-item"><div class="item-title">#${b.id} · ${esc(b.cn)}</div><div class="item-sub">${esc(b.character||'')} · 已选 ${(b.selected_assets||[]).length} 张 · 预设 ${esc(b.preset_code||'-')}</div></div>`).join(''):empty('客户已选照片均已完成修图');const items=jobs.jobs||[];document.getElementById('jobsList').innerHTML=items.length?items.slice(0,20).map(j=>`<div class="list-item"><div class="item-top"><div class="item-title">${esc(j.name||j.title||j.id)}</div>${badge(j.status==='DONE'?'replied':j.status==='FAILED'?'needs_reply':'BOOKED',j.stage||j.status||'--')}</div><div class="item-sub mono">${esc(j.id||'')}</div></div>`).join(''):empty('暂无后台任务');}catch(err){reviewBox.innerHTML=empty(err.message,'error');}}
+        async function approveOrder(id){if(!confirm(`确认审核通过订单 #${id} 并推送交付链接给客户？`))return;try{await api(`/api/retouch/bookings/${id}/approve`,{method:'POST'});toast('已放行并推送客户');await loadJobs();}catch(err){toast(err.message,'err');}}
+        async function runRetouchOnce(){try{await api('/api/retouch/run-once',{method:'POST'});toast('已启动一次修图队列扫描');setTimeout(loadJobs,1200);}catch(err){toast(err.message,'err');}}
+
+        async function loadSettings(){const box=document.getElementById('settingsGroups');box.innerHTML='<div class="loading">正在读取系统配置...</div>';try{const [auth,data]=await Promise.all([api('/api/auth/status'),api('/api/settings/groups')]);document.getElementById('settingsUser').textContent=auth.username||'admin';state.settings=data.groups||[];state.settingsBaseline={};state.settings.forEach(g=>(g.fields||[]).forEach(f=>state.settingsBaseline[f.key]=f.value??''));renderSettings();}catch(err){box.innerHTML=empty(err.message,'error');}}
+        function renderSettings(){document.getElementById('settingsGroups').innerHTML=state.settings.map((g,i)=>`<details class="card settings-group" ${i===0?'open':''}><summary><div><h2>${esc(g.title)}</h2><div class="sub">${esc(g.description||'')}</div></div><span class="badge">${(g.fields||[]).length} 项</span></summary><div class="settings-fields">${(g.fields||[]).map(f=>`<div class="field"><label>${esc(f.label||f.key)} · <span class="mono">${esc(f.key)}</span></label><input class="input" type="${f.is_secret?'password':'text'}" data-setting-key="${esc(f.key)}" value="${esc(f.value)}" placeholder="${esc(f.default||'')}"><div class="item-sub">${esc(f.desc||'')}${f.is_secret?' · 密钥已脱敏，不修改则保持原值':''}</div></div>`).join('')}${g.test_action?`<button class="btn block" onclick="testSetting('${esc(g.test_action)}',this)">${esc(g.test_label||'测试连接')}</button><div class="item-sub" data-test-result="${esc(g.id)}"></div>`:''}</div></details>`).join('')||empty('暂无配置分组');}
+        async function saveSettings(){const updates={};document.querySelectorAll('[data-setting-key]').forEach(el=>{if(el.value!==String(state.settingsBaseline[el.dataset.settingKey]??''))updates[el.dataset.settingKey]=el.value;});if(!Object.keys(updates).length)return toast('没有需要保存的修改');const btn=document.getElementById('settingsSave');btn.disabled=true;try{await api('/api/settings/env',{method:'PUT',body:JSON.stringify({updates})});await api('/api/settings/reload-services',{method:'POST',body:JSON.stringify({services:['im-gateway','booking-site']})});toast(`已保存 ${Object.keys(updates).length} 项并重载相关服务`);await loadSettings();}catch(err){toast(err.message,'err');}finally{btn.disabled=false;}}
+        async function testSetting(action,btn){btn.disabled=true;const old=btn.textContent;btn.textContent='测试中...';try{const result=await api(`/api/settings/${action}`,{method:'POST'});const target=btn.nextElementSibling;if(target)target.textContent=JSON.stringify(result);toast('连通性测试完成');}catch(err){toast(err.message,'err');}finally{btn.disabled=false;btn.textContent=old;}}
+        async function logout(){await fetch('/api/auth/logout',{method:'POST'});location.href='/login?next=/mobile';}
+
+        (async()=>{try{const auth=await api('/api/auth/status');if(!auth.authenticated){location.href='/login?next=/mobile';return;}document.getElementById('settingsUser').textContent=auth.username||'admin';await loadHome();setInterval(()=>{if(!document.hidden&&document.getElementById('chatSheet').hidden)loadHome();},30000);}catch(err){toast(err.message,'err');}})();
+        window.addEventListener('unhandledrejection',event=>{console.error(event.reason);});
+    </script>
+</body>
+</html>

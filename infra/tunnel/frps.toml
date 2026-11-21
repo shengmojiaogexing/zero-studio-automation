@@ -1,0 +1,27 @@
+# ==============================================================================
+# ZERO STUDIO · 公网 VPS FRP 服务端配置模板 (frps.toml)
+# 部署位置：VPS /etc/frp/frps.toml
+# 说明：严禁硬编码密钥，生产部署由 deploy_vps.ps1 注入环境变量或替换为真实 FRP_TOKEN
+# ==============================================================================
+
+bindAddr = "0.0.0.0"
+bindPort = 7000
+
+# XTCP P2P 打洞需要 UDP 端口支持 NAT 穿透（与 bindPort 保持一致或使用 7000/udp）
+quicBindPort = 7000
+
+[auth]
+method = "token"
+token = "{{ .Envs.FRP_TOKEN }}"
+
+# 仅限 VPS 本机回环访问的 Dashboard（禁止公网 0.0.0.0 暴露）
+[webServer]
+addr = "127.0.0.1"
+port = 7500
+user = "admin"
+password = "{{ .Envs.FRP_TOKEN }}"
+
+[log]
+to = "/var/log/frps.log"
+level = "info"
+maxDays = 7

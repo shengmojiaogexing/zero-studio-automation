@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZERO STUDIO | 摄影师终审门禁台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #11141a; color: #eef0f4; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+        .card { background: #1a1f28; border: 1px solid rgba(255,255,255,0.08); }
+    </style>
+</head>
+<body class="min-h-screen p-6 md:p-10">
+    <div class="max-w-7xl mx-auto space-y-8">
+        <header class="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
+            <div>
+                <div class="text-xs font-bold tracking-[0.25em] text-[#6fa8a5] uppercase">ZERO STUDIO · HUMAN REVIEW GATE</div>
+                <h1 class="text-2xl md:text-3xl font-black mt-1">摄影师人工终审与交付门禁台</h1>
+                <p class="text-xs text-gray-400 mt-1">所有自动精修订单必须经摄影师质检确认后，点击「一键放行交付」才允许发送成片链接给客户。</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="pendingBadge" class="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300">待审 0 单</span>
+                <button onclick="loadReviewQueue()" class="px-4 py-2 rounded-lg text-xs font-bold bg-white/10 hover:bg-white/20 transition">刷新队列</button>
+                <a href="/admin.html" class="px-4 py-2 rounded-lg text-xs font-bold bg-[#6fa8a5]/20 text-[#6fa8a5] hover:bg-[#6fa8a5]/30 transition">返回后台 →</a>
+            </div>
+        </header>
+
+        <div id="queueContainer" class="space-y-6">
+            <div class="card rounded-2xl p-10 text-center text-gray-400 text-sm">正在加载待审精修队列...</div>
+        </div>
+    </div>
+
+    <!-- 成片放大预览 Modal -->
+    <div id="zoomModal" class="hidden fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
+        <img id="zoomImg" src="" class="max-h-[92vh] max-w-[92vw] rounded-xl shadow-2xl object-contain" />
+    </div>
+
+    <script>
+        function openZoom(url) {
+            document.getElementById('zoomImg').src = url;
+            document.getElementById('zoomModal').classList.remove('hidden');
+        }
+
+        function formatGeminiSummary(plan) {
+            if (!plan) return '<span class="text-gray-500">无 Gemini 方案记录</span>';
+            const clamped = (plan.clamped_fields && plan.clamped_fields.length)
+                ? `<span class="ml-2 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px]">已安全钳位: ${plan.clamped_fields.join(', ')}</span>`
+                : '';
+            const inpaint = plan.needs_local_inpaint
+                ? `<span class="ml-2 px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[10px]">局部修补: ${plan.inpaint_prompt || '背景去杂物'}</span>`
+                : '';
+            return `
+                <div class="text-xs text-gray-300 space-y-1">
+                    <div>
+                        曝光 <b>${Number(plan.exposure_delta || 0).toFixed(2)}</b> ·
+                        色温 <b>${Number(plan.temp_delta || 0).toFixed(1)}</b> ·
+                        色调 <b>${Number(plan.tint_delta || 0).toFixed(1)}</b> ·
+                        肤色明度 <b>${Number(plan.skin_luminance || 0).toFixed(1)}</b>
+                        ${clamped}${inpaint}
+                    </div>
+                    <div class="text-gray-400">${plan.summary || '按 Cosplay 修图 Skill 完成仿色精修'}</div>
+                </div>
+            `;
+        }
+
+        async function loadReviewQueue() {
+            const container = document.getElementById('queueContainer');
+            try {
+                const res = await fetch('/api/admin/review-queue', { cache: 'no-store' });
+                const data = await res.json();
+                if (!res.ok || data.status !== 'ok') {
+                    container.innerHTML = `<div class="card rounded-2xl p-8 text-center text-red-400">${data.message || '加载失败'}</div>`;
+                    return;
+                }
+                document.getElementById('pendingBadge').textContent = `待审 ${data.pending_count} 单`;
+                if (!data.bookings || data.bookings.length === 0) {
+                    container.innerHTML = '<div class="card rounded-2xl p-12 text-center text-gray-400 text-sm">当前暂无待终审或已交付的精修订单。</div>';
+                    return;
+                }
+
+                container.innerHTML = data.bookings.map(b => {
+                    const isPending = b.status === 'REVIEW_PENDING';
+                    const badge = isPending
+                        ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300">待人工终审 (REVIEW_PENDING)</span>'
+                        : '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300">已放行交付 (DELIVERED)</span>';
+
+                    const actionArea = isPending
+                        ? `<button id="approve-btn-${b.id}" onclick="approveDelivery(${b.id})" class="px-5 py-2.5 rounded-xl font-black text-xs tracking-wider bg-[#6fa8a5] text-[#11141a] hover:bg-[#84beb9] transition">✅ 一键放行交付并推送客户</button>`
+                        : `<a href="${b.delivery_url || ('/delivery/' + b.gallery_token)}" target="_blank" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/10 text-emerald-300 hover:bg-white/20">查看成品交付页 →</a>`;
+
+                    const jobCards = (b.jobs || []).map(j => {
+                        const imgUrl = j.preview_out_url ? `${j.preview_out_url}?t=${encodeURIComponent(j.updated_at || Date.now())}` : '';
+                        const revList = j.revisions || [];
+                        const ver = Number(j.latest_version || 0);
+                        const revHtml = revList.length ? `
+                            <details class="text-[11px] bg-black/40 rounded-lg px-2.5 py-1.5 border border-white/5">
+                                <summary class="cursor-pointer text-gray-400 hover:text-gray-200 select-none">修改记录 (${revList.length} 轮)</summary>
+                                <div class="mt-2 space-y-1.5 border-t border-white/5 pt-2">
+                                    ${revList.map(r => `
+                                        <div class="space-y-0.5">
+                                            <div class="flex justify-between text-[10px]">
+                                                <span class="font-mono text-[#6fa8a5]">v${r.version}</span>
+                                                <span class="${r.pending ? 'text-amber-300' : 'text-gray-500'}">${r.pending ? '⏳ AI 修改中...' : (r.created_at || '')}</span>
+                                            </div>
+                                            <div class="text-gray-300">意见：${r.feedback_text || ''}</div>
+                                            <div class="text-gray-400">结果：${r.summary || ''}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </details>` : '';
+                        return `
+                        <div class="bg-black/30 rounded-xl overflow-hidden border border-white/10 flex flex-col">
+                            <div class="relative aspect-[4/3] bg-black/50 cursor-pointer overflow-hidden" onclick="openZoom('${imgUrl}')">
+                                <img src="${imgUrl}" alt="${j.source_filename || ''}" class="w-full h-full object-cover hover:scale-105 transition" />
+                                <span class="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/70 text-[10px] font-mono text-[#6fa8a5]">v${ver}</span>
+                                ${j.has_pending_revision ? '<div class="absolute inset-0 bg-black/60 flex items-center justify-center text-amber-300 font-bold text-xs">⏳ AI 正在操作 PS 修改中...</div>' : ''}
+                            </div>
+                            <div class="p-3 space-y-2.5 flex-1 flex flex-col justify-between">
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between text-[11px] font-mono text-gray-400">
+                                        <span>${j.source_filename || ('Asset #' + j.asset_id)}</span>
+                                        <span class="text-[#6fa8a5]">${j.stage}</span>
+                                    </div>
+                                    ${formatGeminiSummary(j.gemini_plan)}
+                                    ${revHtml}
+                                </div>
+                                <div class="space-y-1.5 pt-2 border-t border-white/10">
+                                    <textarea id="rev-fb-${j.id}" rows="2" placeholder="哪里不满意？写在这里让 AI 自动操作 PS 修改（保留原 PSD 图层）..." class="w-full rounded-lg bg-black/50 border border-white/10 px-2.5 py-1.5 text-xs text-white outline-none focus:border-[#6fa8a5] resize-none" ${j.has_pending_revision ? 'disabled' : ''}></textarea>
+                                    <button id="rev-btn-${j.id}" onclick="submitFeedback(${j.id})" ${j.has_pending_revision ? 'disabled' : ''} class="w-full py-1.5 rounded-lg text-xs font-bold transition ${j.has_pending_revision ? 'bg-amber-500/20 text-amber-300 cursor-not-allowed' : 'bg-[#e2bac8] text-[#11141a] hover:opacity-90'}">${j.has_pending_revision ? 'AI 正在后台修改中...' : '让 AI 自动修改这张图'}</button>
+                                </div>
+                            </div>
+                        </div>`;
+                    }).join('');
+
+                    return `
+                        <section class="card rounded-2xl p-6 space-y-5">
+                            <div class="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+                                <div class="space-y-1">
+                                    <div class="flex items-center gap-3">
+                                        <h2 class="text-lg font-bold">订单 #${b.id} · ${b.cn || '未知CN'} (${b.character || '-'})</h2>
+                                        ${badge}
+                                    </div>
+                                    <p class="text-xs text-gray-400">
+                                        活动：${b.event_name || '-'} · 日期：${b.date || '-'} · 预设：<span class="text-[#e2bac8] font-mono">${b.preset_code || '-'}</span> · 通道：${b.platform || 'web'} (${b.im_user_id || b.wechat || b.qq || '-'})
+                                    </p>
+                                </div>
+                                <div>${actionArea}</div>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">${jobCards}</div>
+                        </section>
+                    `;
+                }).join('');
+
+                const hasPending = (data.bookings || []).some(b => (b.jobs || []).some(j => j.has_pending_revision));
+                if (window.__reviewPoll) clearTimeout(window.__reviewPoll);
+                if (hasPending) {
+                    window.__reviewPoll = setTimeout(loadReviewQueue, 5000);
+                }
+            } catch (err) {
+                container.innerHTML = '<div class="card rounded-2xl p-8 text-center text-red-400">网络异常，请刷新重试</div>';
+            }
+        }
+
+        async function submitFeedback(jobId) {
+            const input = document.getElementById(`rev-fb-${jobId}`);
+            const btn = document.getElementById(`rev-btn-${jobId}`);
+            const feedback = (input && input.value || '').trim();
+            if (!feedback) { alert('请先在图片下方填写具体修改意见'); return; }
+            if (btn) { btn.disabled = true; btn.textContent = '提交中...'; }
+            try {
+                const res = await fetch(`/api/retouch/jobs/${jobId}/feedback`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ feedback })
+                });
+                const data = await res.json();
+                if (!res.ok || data.status !== 'ok') {
+                    alert(data.message || '提交修改意见失败');
+                    if (btn) { btn.disabled = false; btn.textContent = '让 AI 自动修改这张图'; }
+                    return;
+                }
+                if (input) input.value = '';
+                loadReviewQueue();
+            } catch (err) {
+                alert('网络异常，请重试');
+                if (btn) { btn.disabled = false; btn.textContent = '让 AI 自动修改这张图'; }
+            }
+        }
+
+        async function approveDelivery(bookingId) {
+            if (!confirm(`确认放行订单 #${bookingId}？\n放行后将生成交付链接，状态更新为 DELIVERED，并自动推送至客户微信/QQ。`)) return;
+            const btn = document.getElementById(`approve-btn-${bookingId}`);
+            if (btn) { btn.disabled = true; btn.textContent = '放行推送中...'; }
+
+            try {
+                const res = await fetch(`/api/admin/bookings/${bookingId}/approve-delivery`, { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok || data.status !== 'ok') {
+                    alert(data.message || '放行失败');
+                    if (btn) { btn.disabled = false; btn.textContent = '✅ 一键放行交付并推送客户'; }
+                    return;
+                }
+                const pushTip = data.notify_result && data.notify_result.ok
+                    ? '已自动通过 IM 网关推送至客户！'
+                    : '订单已交付（IM 网关未在线或未绑定通道，可手动复制交付链接发送）。';
+                alert(`🎉 订单 #${bookingId} 放行交付成功！\n成品链接：${data.delivery_url}\n${pushTip}`);
+                loadReviewQueue();
+            } catch (err) {
+                alert('请求异常，请重试');
+                if (btn) { btn.disabled = false; btn.textContent = '✅ 一键放行交付并推送客户'; }
+            }
+        }
+
+        loadReviewQueue();
+    </script>
+</body>
+</html>
