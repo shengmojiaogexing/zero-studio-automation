@@ -42,6 +42,7 @@ load_dotenv(_ENV_FILE, override=False)
 
 from adapters.base import IMAdapter, IncomingMessage  # noqa: E402
 from adapters.qq_napcat import QQNapCatAdapter  # noqa: E402
+from adapters.wechat_bridge import WeChatHTTPBridgeAdapter  # noqa: E402
 from adapters.wechat_wxauto import WeChatWxAutoAdapter  # noqa: E402
 from adapters.wecom_kf import WeComKFAdapter  # noqa: E402
 from brain import StudioBrain, load_im_rules, save_im_rules  # noqa: E402
@@ -125,9 +126,16 @@ def create_app(
         # QQ 只在有 NapCatQQ 的机器上启用（Mac 宿主机）；Windows 微信节点不需要
         if os.getenv("ENABLE_QQ_ADAPTER", "true").lower() in ("1", "true", "yes"):
             resolved_adapters["qq"] = QQNapCatAdapter()
-        # 微信适配器只在有 PC 微信的机器上创建（wxauto 依赖本地微信窗口）
+        # 对外微信通道按 WECHAT_MODE 灵活定型：
+        #   - bridge_http: 新一代微信 4.x HTTP/Webhook 桥接（openclaw-wechat-channel / wechatbot-new / gewechat）
+        #   - desktop:     传统 PC 微信 wxauto/wxauto4
+        #   - wecom_kf:    仅使用官方企业微信客服（合规商业首选，不启个人微信）
         if os.getenv("ENABLE_WECHAT_ADAPTER", "true").lower() in ("1", "true", "yes"):
-            resolved_adapters["wechat"] = WeChatWxAutoAdapter()
+            wechat_mode = os.getenv("WECHAT_MODE", "desktop").strip().lower()
+            if wechat_mode == "bridge_http":
+                resolved_adapters["wechat"] = WeChatHTTPBridgeAdapter()
+            elif wechat_mode != "wecom_kf":
+                resolved_adapters["wechat"] = WeChatWxAutoAdapter()
         # 企微客服走公网回调，不需要本机客户端，默认启用
         resolved_adapters["wecom_kf"] = WeComKFAdapter()
     logger.info("启用的适配器: %s", ", ".join(sorted(resolved_adapters.keys())))
@@ -614,6 +622,24 @@ def create_app(
             return {"status": "ok", "target": target, "text": text, "result": res}
         except Exception as exc:
             return {"status": "error", "target": target, "error": str(exc)}
+
+    @app.post("/webhook/wechat-bridge")
+    async def wechat_bridge_webhook(request: Request) -> Dict[str, Any]:
+        """接收外部微信 4.x 桥接服务（如 openclaw-wechat-channel / wechatbot-new）推送的入站消息。"""
+        expected_token = (os.getenv("WECHAT_BRIDGE_TOKEN") or "").strip()
+        if expected_token:
+            got = (
+                request.headers.get("X-Bridge-Token")
+                or request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+            )
+            if got != expected_token:
+                raise HTTPException(status_code=401, detail="Invalid WECHAT_BRIDGE_TOKEN")
+        body = await request.json()
+        incoming = WeChatHTTPBridgeAdapter.parse_webhook_event(body)
+        if incoming is None:
+            return {"status": "ignored", "reason": "invalid_payload"}
+        result = await resolved_brain.handle_message(incoming)
+        return {"status": "ok", "result": result}
 
     return app
 

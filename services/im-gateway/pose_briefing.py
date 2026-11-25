@@ -186,40 +186,16 @@ class PoseBriefingStore:
         summary_file = self.sheets_dir / f"mobile_summary_{tag}.md"
         summary_file.write_text(md, encoding="utf-8")
 
-        channels: Dict[str, str] = {}
-        token = (pushplus_token if pushplus_token is not None else os.getenv("PUSHPLUS_TOKEN", "")).strip()
-        if token:
-            try:
-                with httpx.Client(timeout=15.0) as client:
-                    resp = client.post(
-                        "https://www.pushplus.plus/send",
-                        json={
-                            "token": token,
-                            "title": f"ZERO STUDIO 现场动作汇总 {date or event_name}".strip(),
-                            "content": md,
-                            "template": "markdown",
-                        },
-                    )
-                    channels["pushplus"] = f"ok:{resp.status_code}"
-            except Exception as exc:  # noqa: BLE001
-                channels["pushplus"] = f"error:{exc}"
-
-        webhook = (
-            openclaw_webhook_url
-            if openclaw_webhook_url is not None
-            else os.getenv("OPENCLAW_NOTIFY_WEBHOOK_URL", "")
-        ).strip()
-        if webhook:
-            try:
-                with httpx.Client(timeout=15.0) as client:
-                    resp = client.post(webhook, json={"title": "ZERO STUDIO 现场动作汇总", "markdown": md})
-                    channels["openclaw_webhook"] = f"ok:{resp.status_code}"
-            except Exception as exc:  # noqa: BLE001
-                channels["openclaw_webhook"] = f"error:{exc}"
+        from openclaw_notifier import OpenClawWeixinNotifier
+        notifier = OpenClawWeixinNotifier(
+            webhook_url=openclaw_webhook_url,
+            pushplus_token=pushplus_token,
+        )
+        notify_res = notifier.push_pose_summary(markdown=md, event_name=event_name, date=date)
 
         return {
             "status": "ok",
             "summary_file": str(summary_file),
-            "channels": channels,
+            "channels": notify_res.get("channels") or {},
             "markdown": md,
         }

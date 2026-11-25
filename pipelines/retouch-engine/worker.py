@@ -398,6 +398,25 @@ class RetouchWorker:
                 final_output_path.name,
                 done_res.get("booking_status"),
             )
+            if done_res.get("booking_status") == "REVIEW_PENDING":
+                try:
+                    gw_dir = str(WORKSPACE_ROOT / "services" / "im-gateway")
+                    if gw_dir not in sys.path:
+                        sys.path.insert(0, gw_dir)
+                    from openclaw_notifier import OpenClawWeixinNotifier
+                    pub_base = (os.getenv("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+                    full_preview = f"{pub_base}{preview_out_url}" if (pub_base and preview_out_url.startswith("/")) else preview_out_url
+                    review_url = f"{pub_base}/review.html?booking_id={booking_id}" if pub_base else f"/review.html?booking_id={booking_id}"
+                    OpenClawWeixinNotifier().push_review_ready(
+                        booking_id=booking_id,
+                        cn=str(booking.get("cn") or ""),
+                        character=str(booking.get("character") or ""),
+                        review_url=review_url,
+                        preview_url=full_preview,
+                        asset_count=len(booking.get("selected_assets") or [asset]),
+                    )
+                except Exception as notify_exc:  # noqa: BLE001
+                    logger.warning("推送待终审微信通知失败（不影响修图结果）: %s", notify_exc)
             return {
                 "job_id": job_id,
                 "booking_id": booking_id,
