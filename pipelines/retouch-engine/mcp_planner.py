@@ -56,6 +56,9 @@ ALLOWED_PLANNER_TOOLS = {
     "ps_apply_high_pass_sharpen",
     "ps_select_subject",
     "ps_deselect",
+    "ps_add_vibrance_layer",
+    "ps_set_clipping_mask",
+    "ps_add_ambient_glow_layer",
     "ps_apply_liquify",
     "ps_run_action",
     "ps_execute_extendscript",
@@ -76,6 +79,77 @@ LOCAL_8B_PLANNER_SYSTEM_PROMPT = """你是 ZERO STUDIO 的本地 Photoshop MCP �
    动作组 (ps_run_action，仅当方案提供 action_set 与 action_name 时调用)。
 3. 数值接近 0 的步骤直接跳过，不要创建无意义的空图层。
 4. 严格尊重亚洲人肤色保护红线（oranges 色相 [-8,8]、饱和度 [-18,15]），切忌激进拉满。"""
+
+
+def compile_bright_low_contrast_stack(layer_prefix: str = "BLC") -> List[Dict[str, Any]]:
+    """
+    严格按 `configs/retouch_skills/bright_low_contrast_cosplay_skill.md` 第二阶段编排的
+    「亮调低反差 Cosplay」标准 Photoshop 分层 MCP 工具栈：
+      1. 反选背景 -> 色阶压平反差 (明度混合模式) -> 自然饱和度 -65 -> 分通道 HSL 压制红/黄/绿/青蓝 -> 背景压暗
+      2. 肤色色彩范围 (skinTones) -> 独立明度提亮 (不偏色)
+      3. 主体选区 -> 曝光度+Gamma 恢复立体感 -> 自然饱和度 +16 色彩点睛
+      4. 环境高光辉光 (滤色 18%) + 50% 双中性灰柔光图层
+      5. 仅针对主体的高反差保留锐化 (2.0px, 线性光 30% + 主体蒙版不锐化背景)
+    """
+    return [
+        # 1a. 背景反选 -> 色阶压平反差（明度混合模式）
+        {"name": "ps_select_subject", "arguments": {}},
+        {"name": "ps_modify_selection", "arguments": {"feather_px": 12.0, "invert": True}},
+        {"name": "ps_add_levels_layer", "arguments": {"black_point": 8, "gamma": 1.0, "white_point": 245, "output_black": 10, "output_white": 240, "layer_name": f"{layer_prefix}_BG_Levels_Luma"}},
+        {"name": "ps_set_layer_blend_opacity", "arguments": {"blend_mode": "luminosity", "opacity": 100.0}},
+        {"name": "ps_deselect", "arguments": {}},
+        # 1b. 背景反选 -> 自然饱和度大幅降低 (-65)
+        {"name": "ps_select_subject", "arguments": {}},
+        {"name": "ps_modify_selection", "arguments": {"feather_px": 12.0, "invert": True}},
+        {"name": "ps_add_vibrance_layer", "arguments": {"vibrance": -65, "saturation": -10, "layer_name": f"{layer_prefix}_BG_Vibrance"}},
+        {"name": "ps_deselect", "arguments": {}},
+        # 1c. 背景反选 -> 分通道 HSL 压制（消除背景红牌子/绿杂色，保留暖调氛围）
+        {"name": "ps_select_subject", "arguments": {}},
+        {"name": "ps_modify_selection", "arguments": {"feather_px": 12.0, "invert": True}},
+        {
+            "name": "ps_add_hsl_layer",
+            "arguments": {
+                "hsl_adjustments": {
+                    "reds": {"hue": 0, "saturation": -30, "luminance": -15},
+                    "yellows": {"hue": 0, "saturation": -25, "luminance": -6},
+                    "greens": {"hue": 0, "saturation": -30, "luminance": 0},
+                    "aquas": {"hue": 0, "saturation": -20, "luminance": 6},
+                    "blues": {"hue": 0, "saturation": -20, "luminance": 6},
+                },
+                "skin_luminance": 0.0,
+                "layer_name": f"{layer_prefix}_BG_HSL",
+            },
+        },
+        {"name": "ps_deselect", "arguments": {}},
+        # 1d. 背景反选 -> 压暗背景突出主体
+        {"name": "ps_select_subject", "arguments": {}},
+        {"name": "ps_modify_selection", "arguments": {"feather_px": 14.0, "invert": True}},
+        {"name": "ps_add_exposure_layer", "arguments": {"exposure_delta": -0.45, "gamma": 1.0, "layer_name": f"{layer_prefix}_BG_Darken"}},
+        {"name": "ps_deselect", "arguments": {}},
+        # 2. 主体肤色独立提亮（明度混合模式，白净通透不偏色）
+        {"name": "ps_select_color_range", "arguments": {"preset": "skinTones", "fuzziness": 38}},
+        {"name": "ps_modify_selection", "arguments": {"feather_px": 6.0, "invert": False}},
+        {"name": "ps_add_exposure_layer", "arguments": {"exposure_delta": 0.28, "gamma": 1.0, "layer_name": f"{layer_prefix}_Skin_Bright_Luma"}},
+        {"name": "ps_set_layer_blend_opacity", "arguments": {"blend_mode": "luminosity", "opacity": 85.0}},
+        {"name": "ps_deselect", "arguments": {}},
+        # 3. 主体恢复立体感（曝光 + Gamma 微调增强暗部扎实度）+ 色彩点睛
+        {"name": "ps_select_subject", "arguments": {}},
+        {"name": "ps_modify_selection", "arguments": {"feather_px": 8.0, "invert": False}},
+        {"name": "ps_add_exposure_layer", "arguments": {"exposure_delta": 0.20, "gamma": 0.94, "layer_name": f"{layer_prefix}_Subject_Contrast"}},
+        {"name": "ps_deselect", "arguments": {}},
+        {"name": "ps_select_subject", "arguments": {}},
+        {"name": "ps_modify_selection", "arguments": {"feather_px": 8.0, "invert": False}},
+        {"name": "ps_add_vibrance_layer", "arguments": {"vibrance": 16, "saturation": 0, "layer_name": f"{layer_prefix}_Subject_Vibrance"}},
+        {"name": "ps_deselect", "arguments": {}},
+        # 4. 空气感高光辉光 + 50% 双中性灰柔光层
+        {"name": "ps_add_ambient_glow_layer", "arguments": {"opacity": 18.0, "blend_mode": "screen", "layer_name": f"{layer_prefix}_AmbientGlow"}},
+        {"name": "ps_create_neutral_gray_layer", "arguments": {"layer_name": f"{layer_prefix}_NeutralGray", "blend_mode": "softlight", "opacity": 100.0}},
+        # 5. 仅针对主体的高反差保留锐化（2.0px, 线性光 30% + 主体蒙版不锐化背景）
+        {"name": "ps_apply_high_pass_sharpen", "arguments": {"radius": 2.0, "blend_mode": "linearlight", "opacity": 30.0, "layer_name": f"{layer_prefix}_Subject_HighPass"}},
+        {"name": "ps_select_subject", "arguments": {}},
+        {"name": "ps_add_layer_mask_from_selection", "arguments": {"invert": False}},
+        {"name": "ps_deselect", "arguments": {}},
+    ]
 
 
 def compile_plan_to_mcp_calls(

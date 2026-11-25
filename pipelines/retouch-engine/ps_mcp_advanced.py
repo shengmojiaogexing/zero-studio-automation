@@ -364,3 +364,94 @@ def build_liquify_jsx(
         return "liquify_skipped";
     }}
     """
+
+
+def build_vibrance_layer_jsx(
+    vibrance: int = 0,
+    saturation: int = 0,
+    layer_name: str = "ZS_Vibrance",
+) -> str:
+    """新建非破坏性「自然饱和度 (Vibrance)」调整图层（支持背景大幅降饱和 -70 或主体提鲜活 +15）。"""
+    vib = int(_clamp(vibrance, -100, 60))
+    sat = int(_clamp(saturation, -80, 40))
+    return f"""
+    var d1 = new ActionDescriptor();
+    var r1 = new ActionReference();
+    r1.putClass(charIDToTypeID("AdjL"));
+    d1.putReference(charIDToTypeID("null"), r1);
+    var d2 = new ActionDescriptor();
+    var d3 = new ActionDescriptor();
+    d3.putInteger(stringIDToTypeID("vibrance"), {vib});
+    d3.putInteger(charIDToTypeID("Strt"), {sat});
+    d2.putObject(charIDToTypeID("Type"), stringIDToTypeID("vibrance"), d3);
+    d1.putObject(charIDToTypeID("Usng"), charIDToTypeID("AdjL"), d2);
+    executeAction(charIDToTypeID("Mk  "), d1, DialogModes.NO);
+    try {{ app.activeDocument.activeLayer.name = {_js_str(layer_name)}; }} catch (e) {{}}
+    return "vibrance_added:v={vib},s={sat}";
+    """
+
+
+def build_exposure_gamma_jsx(
+    exposure_delta: float = 0.0,
+    offset: float = 0.0,
+    gamma: float = 1.0,
+    layer_name: str = "ZS_Exposure",
+) -> str:
+    """新建支持灰度系数 Gamma 的非破坏性「曝光度 (Exposure)」调整图层。"""
+    exp = _clamp(exposure_delta, -1.5, 1.5)
+    off = _clamp(offset, -0.1, 0.1)
+    gm = _clamp(gamma, 0.70, 1.40)
+    return f"""
+    var d1 = new ActionDescriptor();
+    var r1 = new ActionReference();
+    r1.putClass(charIDToTypeID("AdjL"));
+    d1.putReference(charIDToTypeID("null"), r1);
+    var d2 = new ActionDescriptor();
+    var d3 = new ActionDescriptor();
+    d3.putEnumerated(stringIDToTypeID("presetKind"), stringIDToTypeID("presetKindType"), stringIDToTypeID("presetKindCustom"));
+    d3.putDouble(stringIDToTypeID("exposure"), {exp});
+    d3.putDouble(stringIDToTypeID("offset"), {off});
+    d3.putDouble(stringIDToTypeID("gammaCorrection"), {gm});
+    d2.putObject(charIDToTypeID("Type"), stringIDToTypeID("exposure"), d3);
+    d1.putObject(charIDToTypeID("Usng"), charIDToTypeID("AdjL"), d2);
+    executeAction(charIDToTypeID("Mk  "), d1, DialogModes.NO);
+    try {{ app.activeDocument.activeLayer.name = {_js_str(layer_name)}; }} catch (e) {{}}
+    return "exposure_gamma_added:exp={exp},gamma={gm}";
+    """
+
+
+def build_clipping_mask_jsx(enabled: bool = True) -> str:
+    """将当前激活图层设为下方图层的剪贴蒙版（或取消剪贴蒙版）。"""
+    flag = "true" if enabled else "false"
+    return f"""
+    app.activeDocument.activeLayer.grouped = {flag};
+    return "clipping_mask:" + String(app.activeDocument.activeLayer.grouped);
+    """
+
+
+def build_ambient_glow_jsx(
+    opacity: float = 18.0,
+    blend_mode: str = "screen",
+    layer_name: str = "ZS_AmbientGlow",
+) -> str:
+    """新建空气感环境高光辉光层（滤色 / 线性减淡，柔和纯白顶部逆光渐变，不透明度 10%~30%）。"""
+    op = _clamp(opacity, 5.0, 40.0)
+    bm = "BlendMode.LINEARDODGE" if str(blend_mode or "").strip().lower() in ("lineardodge", "add", "linear_dodge") else "BlendMode.SCREEN"
+    return f"""
+    var doc = app.activeDocument;
+    var glow = doc.artLayers.add();
+    glow.name = {_js_str(layer_name)};
+    var white = new SolidColor();
+    white.rgb.red = 255; white.rgb.green = 255; white.rgb.blue = 255;
+    var w = doc.width.as("px");
+    var h = doc.height.as("px");
+    // 在画布上半部光源区域创建柔和椭圆羽化选区填充纯白
+    var selRegion = [[w * 0.15, 0], [w * 0.85, 0], [w * 0.85, h * 0.42], [w * 0.15, h * 0.42]];
+    doc.selection.select(selRegion);
+    doc.selection.feather(UnitValue(Math.max(40, Math.round(Math.min(w, h) * 0.12)), "px"));
+    doc.selection.fill(white, ColorBlendMode.NORMAL, 100, false);
+    doc.selection.deselect();
+    glow.blendMode = {bm};
+    glow.opacity = {op};
+    return "ambient_glow_added:op={op}";
+    """

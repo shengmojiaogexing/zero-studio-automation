@@ -7,6 +7,14 @@
     "ps_action_name": "",
     "default_notes": ""
   },
+  "bright_low_contrast": {
+    "name": "bright_low_contrast",
+    "xmp_file": "7R5A5039.xmp",
+    "reference_image": "",
+    "ps_action_set": "ZERO_STUDIO",
+    "ps_action_name": "",
+    "default_notes": "亮调低反差通透人像：先压平反差定正白，主体与背景分离，背景明度色阶+降自然饱和度+去红黄绿杂色，主体肤色明度提亮+Gamma立体感+线性光30%高反差锐化"
+  },
   "7R5A5039": {
     "name": "7R5A5039",
     "xmp_file": "7R5A5039.xmp",

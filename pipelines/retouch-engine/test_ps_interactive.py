@@ -173,6 +173,21 @@ def run_ps_test(
             out_preview_jpg=out_jpg,
             brief_text=notes,
         )
+    elif preset_code == "bright_low_contrast":
+        from mcp_planner import compile_bright_low_contrast_stack
+        blc_planner = Local8BMCPPlanner(
+            toolkit=toolkit,
+            ps_mcp_backend="com",
+            mock_llm_fn=lambda ctx: compile_bright_low_contrast_stack(layer_prefix="BLC"),
+        )
+        res = blc_planner.execute_with_checkpoints_and_backtrack(
+            source_path=tiff_path,
+            high_level_plan=plan,
+            out_psd_path=out_psd,
+            out_preview_jpg=out_jpg,
+            brief_text=notes,
+            checkpoint_every=checkpoint_every,
+        )
     else:
         res = planner.execute_with_checkpoints_and_backtrack(
             source_path=tiff_path,
@@ -320,6 +335,7 @@ def main() -> None:
     parser.add_argument("--ref", help="仿色参考图路径（可选）")
     parser.add_argument("--xmp", help="Camera Raw .xmp 预设文件路径（可选）")
     parser.add_argument("--backend", choices=("com", "adb_mcp"), default="com")
+    parser.add_argument("--preset", default="bright_low_contrast", help="预设代码 (bright_low_contrast / cyan_air_event)")
     parser.add_argument("--notes", default="", help="附加修图风格要求")
     parser.add_argument("--checkpoint-every", type=int, default=3)
     parser.add_argument("--no-cloud", action="store_true", help="跳过云端视觉模型，仅本地直方图仿色")
@@ -335,6 +351,7 @@ def main() -> None:
         ref_path=Path(args.ref) if args.ref else None,
         xmp_path=Path(args.xmp) if args.xmp else None,
         backend=args.backend,
+        preset_code=args.preset,
         notes=args.notes,
         checkpoint_every=args.checkpoint_every,
         use_cloud_vision=not args.no_cloud,

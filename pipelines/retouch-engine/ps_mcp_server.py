@@ -49,7 +49,10 @@ from ps_com_bridge import (  # noqa: E402
 from ps_mcp_advanced import (  # noqa: E402
     BLEND_MODES_MAP,
     build_add_layer_mask_jsx,
+    build_ambient_glow_jsx,
+    build_clipping_mask_jsx,
     build_convert_smart_object_jsx,
+    build_exposure_gamma_jsx,
     build_frequency_separation_jsx,
     build_high_pass_sharpen_jsx,
     build_levels_layer_jsx,
@@ -59,6 +62,7 @@ from ps_mcp_advanced import (  # noqa: E402
     build_select_color_range_jsx,
     build_select_subject_jsx,
     build_set_layer_blend_opacity_jsx,
+    build_vibrance_layer_jsx,
 )
 
 logger = logging.getLogger("retouch_engine.ps_mcp")
@@ -199,17 +203,31 @@ class PSMCPToolkit:
     def ps_add_exposure_layer(
         self,
         exposure_delta: float,
+        gamma: float = 1.0,
+        offset: float = 0.0,
         layer_name: str = "ZS_Exposure",
     ) -> Dict[str, Any]:
         lo, hi = SAFETY_BOUNDS["exposure_delta"]
         safe_exp = _clamp(exposure_delta, lo, hi)
-        if abs(safe_exp) <= 1e-3:
-            res = {"status": "skipped", "reason": "exposure_delta is ~0"}
-            return self._record("ps_add_exposure_layer", {"exposure_delta": safe_exp}, res)
-        jsx = _build_adjustment_layers_jsx({"exposure_delta": safe_exp}, layer_prefix=layer_name.replace("_Exposure", ""))
-        res = self._eval(jsx + '\nreturn "exposure_added";')
+        safe_gamma = _clamp(gamma, 0.70, 1.40)
+        safe_offset = _clamp(offset, -0.1, 0.1)
+        if abs(safe_exp) <= 1e-3 and abs(safe_gamma - 1.0) <= 1e-3 and abs(safe_offset) <= 1e-4:
+            res = {"status": "skipped", "reason": "exposure/gamma delta is ~0"}
+            return self._record("ps_add_exposure_layer", {"exposure_delta": safe_exp, "gamma": safe_gamma}, res)
+        jsx = build_exposure_gamma_jsx(
+            exposure_delta=safe_exp,
+            offset=safe_offset,
+            gamma=safe_gamma,
+            layer_name=layer_name,
+        )
+        res = self._eval(jsx)
         res["applied_exposure_delta"] = safe_exp
-        return self._record("ps_add_exposure_layer", {"exposure_delta": safe_exp, "layer_name": layer_name}, res)
+        res["applied_gamma"] = safe_gamma
+        return self._record(
+            "ps_add_exposure_layer",
+            {"exposure_delta": safe_exp, "gamma": safe_gamma, "offset": safe_offset, "layer_name": layer_name},
+            res,
+        )
 
     def ps_add_color_balance_layer(
         self,
@@ -539,6 +557,39 @@ class PSMCPToolkit:
         res = self._eval(jsx)
         return self._record("ps_deselect", {}, res)
 
+    def ps_add_vibrance_layer(
+        self,
+        vibrance: int = 0,
+        saturation: int = 0,
+        layer_name: str = "ZS_Vibrance",
+    ) -> Dict[str, Any]:
+        jsx = build_vibrance_layer_jsx(vibrance=vibrance, saturation=saturation, layer_name=layer_name)
+        res = self._eval(jsx)
+        return self._record(
+            "ps_add_vibrance_layer",
+            {"vibrance": int(_clamp(vibrance, -100, 60)), "saturation": int(_clamp(saturation, -80, 40)), "layer_name": layer_name},
+            res,
+        )
+
+    def ps_set_clipping_mask(self, enabled: bool = True) -> Dict[str, Any]:
+        jsx = build_clipping_mask_jsx(enabled=enabled)
+        res = self._eval(jsx)
+        return self._record("ps_set_clipping_mask", {"enabled": bool(enabled)}, res)
+
+    def ps_add_ambient_glow_layer(
+        self,
+        opacity: float = 18.0,
+        blend_mode: str = "screen",
+        layer_name: str = "ZS_AmbientGlow",
+    ) -> Dict[str, Any]:
+        jsx = build_ambient_glow_jsx(opacity=opacity, blend_mode=blend_mode, layer_name=layer_name)
+        res = self._eval(jsx)
+        return self._record(
+            "ps_add_ambient_glow_layer",
+            {"opacity": _clamp(opacity, 5.0, 40.0), "blend_mode": blend_mode, "layer_name": layer_name},
+            res,
+        )
+
     def ps_apply_liquify(
         self,
         face_slim: int = 0,
@@ -660,6 +711,9 @@ class PSMCPToolkit:
             "ps_apply_high_pass_sharpen": self.ps_apply_high_pass_sharpen,
             "ps_select_subject": self.ps_select_subject,
             "ps_deselect": self.ps_deselect,
+            "ps_add_vibrance_layer": self.ps_add_vibrance_layer,
+            "ps_set_clipping_mask": self.ps_set_clipping_mask,
+            "ps_add_ambient_glow_layer": self.ps_add_ambient_glow_layer,
             "ps_apply_liquify": self.ps_apply_liquify,
             "ps_execute_extendscript": self.ps_execute_extendscript,
             "ps_execute_batchplay": self.ps_execute_batchplay,
@@ -1143,6 +1197,21 @@ def create_fastmcp_server(dry_run: bool = False):
     def ps_deselect() -> str:
         """取消当前文档选区。"""
         return json.dumps(kit.ps_deselect(), ensure_ascii=False)
+
+    @mcp.tool()
+    def ps_add_vibrance_layer(vibrance: int = 0, saturation: int = 0, layer_name: str = "ZS_Vibrance") -> str:
+        """新建非破坏性自然饱和度调整图层（支持背景降 -70 或主体提鲜活 +15）。"""
+        return json.dumps(kit.ps_add_vibrance_layer(vibrance=vibrance, saturation=saturation, layer_name=layer_name), ensure_ascii=False)
+
+    @mcp.tool()
+    def ps_set_clipping_mask(enabled: bool = True) -> str:
+        """设置或取消当前图层的剪贴蒙版。"""
+        return json.dumps(kit.ps_set_clipping_mask(enabled=enabled), ensure_ascii=False)
+
+    @mcp.tool()
+    def ps_add_ambient_glow_layer(opacity: float = 18.0, blend_mode: str = "screen", layer_name: str = "ZS_AmbientGlow") -> str:
+        """在光源方向新建柔和空气感高光辉光层（滤色/线性减淡）。"""
+        return json.dumps(kit.ps_add_ambient_glow_layer(opacity=opacity, blend_mode=blend_mode, layer_name=layer_name), ensure_ascii=False)
 
     @mcp.tool()
     def ps_apply_liquify(face_slim: int = 0, eye_size: int = 0, jawline: int = 0, convert_smart_first: bool = True) -> str:
