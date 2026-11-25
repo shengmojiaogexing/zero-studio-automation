@@ -178,6 +178,69 @@ def write_16bit_tiff_unicode(rgb_uint16: np.ndarray, out_tiff_path: Path) -> Non
     os.replace(tmp_path, out_tiff_path)
 
 
+def _convert_raw_via_photoshop_acr(
+    nas_raw_path: Path,
+    resolved_xmp: Path,
+    out_tiff_path: Path,
+) -> Optional[Dict[str, Any]]:
+    """
+    通过本机 Photoshop 原生 Adobe Camera Raw 静默解码 RAW + 同名 .xmp 边车，导出真 16-bit TIFF：
+    - 100% 还原 Lightroom / ACR 的相机校准、颜色分级、点曲线、HSL、蒙版与降噪（彻底消除 rawpy 模拟失真）；
+    - 只读拷贝原片到临时工作区并写入同名 .xmp，绝不触碰 NAS 原片目录；
+    - 全程 DialogModes.NO 零弹窗阻塞。
+    """
+    if os.name != "nt":
+        return None
+    if str(os.getenv("RETOUCH_USE_NATIVE_ACR", "true")).strip().lower() in ("0", "false", "no", "off"):
+        return None
+    try:
+        from ps_com_bridge import PSCOMBridge, _js_str, _ps_path, is_com_available
+        if not is_com_available():
+            return None
+    except Exception:
+        return None
+
+    stage_dir = out_tiff_path.parent / f".acr_stage_{os.getpid()}"
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    staged_raw = stage_dir / nas_raw_path.name
+    staged_xmp = staged_raw.with_suffix(".xmp")
+    try:
+        shutil.copy2(nas_raw_path, staged_raw)
+        shutil.copy2(resolved_xmp, staged_xmp)
+        jsx = f"""
+        var rawFile = new File({_js_str(_ps_path(staged_raw))});
+        var tiffFile = new File({_js_str(_ps_path(out_tiff_path))});
+        var openOpts = new CameraRAWOpenOptions();
+        openOpts.bitsPerChannel = BitsPerChannelType.SIXTEEN;
+        var doc = app.open(rawFile, openOpts);
+        try {{
+            var tiffOpts = new TiffSaveOptions();
+            tiffOpts.imageCompression = TIFFEncoding.NONE;
+            tiffOpts.embedColorProfile = true;
+            tiffOpts.layers = false;
+            doc.saveAs(tiffFile, tiffOpts, true, Extension.LOWERCASE);
+            return doc.width.as("px") + "x" + doc.height.as("px");
+        }} finally {{
+            doc.close(SaveOptions.DONOTSAVECHANGES);
+        }}
+        """
+        bridge = PSCOMBridge()
+        bridge._eval_jsx(jsx)
+        if out_tiff_path.exists() and out_tiff_path.stat().st_size > 1024:
+            logger.info("已通过 Photoshop 原生 ACR 静默解码 RAW+XMP -> 16-bit TIFF: %s", out_tiff_path.name)
+            return {
+                "tiff_path": str(out_tiff_path),
+                "backend": "photoshop-native-acr:16bit-tiff",
+                "xmp_used": str(resolved_xmp),
+                "bit_depth": 16,
+            }
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Photoshop 原生 ACR 解码失败，自动回退 Python rawpy: %s", exc)
+    finally:
+        shutil.rmtree(stage_dir, ignore_errors=True)
+    return None
+
+
 def convert_raw_with_xmp_to_tiff(
     nas_raw_path: Path,
     out_tiff_path: Path,
@@ -185,6 +248,7 @@ def convert_raw_with_xmp_to_tiff(
     xmp_path: Optional[Path] = None,
     presets_map_path: Optional[Path] = None,
     retouch_xmp_dir: Optional[Path] = None,
+    prefer_native_acr: bool = True,
 ) -> Dict[str, Any]:
     """
     只读读取 NAS 原始 .ARW/.CR3（或测试 JPG），套用正式修图 .xmp，静默导出 16-bit TIFF 至本地高速工作区。
@@ -201,6 +265,12 @@ def convert_raw_with_xmp_to_tiff(
     )
     resolved_xmp: Optional[Path] = xmp_path if (xmp_path and Path(xmp_path).exists()) else preset_entry.get("resolved_xmp_path")
     out_tiff_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 0. Windows 优先调用本机 Photoshop 原生 Adobe Camera Raw 静默解码（100% 还原 XMP 校准/分级/曲线/蒙版）
+    if prefer_native_acr and nas_raw_path.suffix.lower() in RAW_EXTENSIONS and resolved_xmp is not None:
+        native_res = _convert_raw_via_photoshop_acr(nas_raw_path, resolved_xmp, out_tiff_path)
+        if native_res is not None:
+            return native_res
 
     # 1. 优先尝试 darktable-cli 16-bit TIFF 静默导出
     darktable_bin = shutil.which("darktable-cli")

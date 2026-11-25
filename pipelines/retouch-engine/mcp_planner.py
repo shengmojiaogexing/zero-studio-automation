@@ -55,6 +55,7 @@ ALLOWED_PLANNER_TOOLS = {
     "ps_convert_to_smart_object",
     "ps_apply_high_pass_sharpen",
     "ps_select_subject",
+    "ps_deselect",
     "ps_apply_liquify",
     "ps_run_action",
     "ps_execute_extendscript",
@@ -152,6 +153,102 @@ def compile_plan_to_mcp_calls(
                         "layer_name": f"{layer_prefix}_SelColor_{idx}",
                     },
                 })
+
+    # 5. 主体蒙版分区调色（ps_select_subject -> 羽化 -> 调整层自动带主体蒙版 -> 取消选区）
+    subj = safe.get("subject_mask_adjust") or {}
+    if isinstance(subj, dict) and subj.get("enabled"):
+        s_exp = float(subj.get("exposure_delta") or 0.0)
+        s_temp = float(subj.get("temp_delta") or 0.0)
+        s_feather = float(subj.get("feather_px") or 8.0)
+        if abs(s_exp) > 1e-3:
+            calls.append({"name": "ps_select_subject", "arguments": {}})
+            if s_feather > 0:
+                calls.append({"name": "ps_modify_selection", "arguments": {"feather_px": s_feather, "invert": False}})
+            calls.append({"name": "ps_add_exposure_layer", "arguments": {"exposure_delta": s_exp, "layer_name": f"{layer_prefix}_Subject_Exposure"}})
+            calls.append({"name": "ps_deselect", "arguments": {}})
+        if abs(s_temp) > 1e-2:
+            calls.append({"name": "ps_select_subject", "arguments": {}})
+            if s_feather > 0:
+                calls.append({"name": "ps_modify_selection", "arguments": {"feather_px": s_feather, "invert": False}})
+            calls.append({"name": "ps_add_color_balance_layer", "arguments": {"temp_delta": s_temp, "tint_delta": 0.0, "layer_name": f"{layer_prefix}_Subject_Color"}})
+            calls.append({"name": "ps_deselect", "arguments": {}})
+
+    # 6. 背景反选压暗分区（ps_select_subject -> 反选羽化 -> 调整层自动带背景蒙版 -> 取消选区）
+    bg = safe.get("background_mask_adjust") or {}
+    if isinstance(bg, dict) and bg.get("enabled"):
+        b_exp = float(bg.get("exposure_delta") or 0.0)
+        b_temp = float(bg.get("temp_delta") or 0.0)
+        b_sat = float(bg.get("saturation_delta") or 0.0)
+        b_feather = float(bg.get("feather_px") or 12.0)
+        if abs(b_exp) > 1e-3:
+            calls.append({"name": "ps_select_subject", "arguments": {}})
+            calls.append({"name": "ps_modify_selection", "arguments": {"feather_px": b_feather, "invert": True}})
+            calls.append({"name": "ps_add_exposure_layer", "arguments": {"exposure_delta": b_exp, "layer_name": f"{layer_prefix}_BG_Exposure"}})
+            calls.append({"name": "ps_deselect", "arguments": {}})
+        if abs(b_temp) > 1e-2:
+            calls.append({"name": "ps_select_subject", "arguments": {}})
+            calls.append({"name": "ps_modify_selection", "arguments": {"feather_px": b_feather, "invert": True}})
+            calls.append({"name": "ps_add_color_balance_layer", "arguments": {"temp_delta": b_temp, "tint_delta": 0.0, "layer_name": f"{layer_prefix}_BG_Color"}})
+            calls.append({"name": "ps_deselect", "arguments": {}})
+        if abs(b_sat) > 1e-1:
+            calls.append({"name": "ps_select_subject", "arguments": {}})
+            calls.append({"name": "ps_modify_selection", "arguments": {"feather_px": b_feather, "invert": True}})
+            calls.append({
+                "name": "ps_add_hsl_layer",
+                "arguments": {
+                    "hsl_adjustments": {
+                        "yellows": {"hue": 0, "saturation": b_sat, "luminance": 0},
+                        "greens": {"hue": 0, "saturation": b_sat, "luminance": 0},
+                    },
+                    "skin_luminance": 0.0,
+                    "layer_name": f"{layer_prefix}_BG_Desat",
+                },
+            })
+            calls.append({"name": "ps_deselect", "arguments": {}})
+
+    # 7. 肤色独立保护蒙版（色彩范围 skinTones -> 羽化 -> 提亮/微暖防染灰 -> 取消选区）
+    skin = safe.get("skin_protect_mask") or {}
+    if isinstance(skin, dict) and skin.get("enabled"):
+        sk_exp = float(skin.get("exposure_delta") or 0.0)
+        sk_temp = float(skin.get("temp_delta") or 0.0)
+        sk_fuzz = int(skin.get("fuzziness") or 38)
+        sk_feather = float(skin.get("feather_px") or 6.0)
+        if abs(sk_exp) > 1e-3:
+            calls.append({"name": "ps_select_color_range", "arguments": {"preset": "skinTones", "fuzziness": sk_fuzz}})
+            if sk_feather > 0:
+                calls.append({"name": "ps_modify_selection", "arguments": {"feather_px": sk_feather, "invert": False}})
+            calls.append({"name": "ps_add_exposure_layer", "arguments": {"exposure_delta": sk_exp, "layer_name": f"{layer_prefix}_Skin_Bright"}})
+            calls.append({"name": "ps_deselect", "arguments": {}})
+        if abs(sk_temp) > 1e-2:
+            calls.append({"name": "ps_select_color_range", "arguments": {"preset": "skinTones", "fuzziness": sk_fuzz}})
+            if sk_feather > 0:
+                calls.append({"name": "ps_modify_selection", "arguments": {"feather_px": sk_feather, "invert": False}})
+            calls.append({"name": "ps_add_color_balance_layer", "arguments": {"temp_delta": sk_temp, "tint_delta": 0.0, "layer_name": f"{layer_prefix}_Skin_Warm"}})
+            calls.append({"name": "ps_deselect", "arguments": {}})
+
+    # 8. 商业非破坏性收尾（中性灰 / 高低频 / 智能对象高反差保留锐化）
+    fin = safe.get("finishing") or {}
+    if isinstance(fin, dict):
+        if fin.get("frequency_separation"):
+            calls.append({
+                "name": "ps_create_frequency_separation",
+                "arguments": {"gaussian_radius": float(fin.get("freq_sep_radius") or 6.0), "group_name": f"{layer_prefix}_FreqSep"},
+            })
+        if fin.get("neutral_gray_layer"):
+            calls.append({
+                "name": "ps_create_neutral_gray_layer",
+                "arguments": {"layer_name": f"{layer_prefix}_NeutralGray", "blend_mode": "softlight", "opacity": 100.0},
+            })
+        if fin.get("high_pass_sharpen"):
+            calls.append({
+                "name": "ps_apply_high_pass_sharpen",
+                "arguments": {
+                    "radius": float(fin.get("high_pass_radius") or 1.8),
+                    "blend_mode": "overlay",
+                    "opacity": float(fin.get("high_pass_opacity") or 45.0),
+                    "layer_name": f"{layer_prefix}_HighPass",
+                },
+            })
 
     if ps_action and ps_action.get("action_set") and ps_action.get("action_name"):
         calls.append({
@@ -345,7 +442,7 @@ class Local8BMCPPlanner:
                 user_msg += f"\n补充自然语言修图要求：{brief_text.strip()}\n"
             if ps_action and ps_action.get("action_set") and ps_action.get("action_name"):
                 user_msg += f"\n可用 Photoshop 动作组：{json.dumps(ps_action, ensure_ascii=False)}\n"
-            user_msg += "\n请调用对应的 Photoshop MCP 工具完成非破坏性调色。"
+            user_msg += "\n请调用对应的 Photoshop MCP 工具完成非破坏性分区蒙版调色与精修。"
 
             body = {
                 "model": model_id,

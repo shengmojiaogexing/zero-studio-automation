@@ -65,12 +65,49 @@ GEMINI_JSON_CONTRACT_PROMPT = """你必须严格仅输出一个合法的 JSON �
   },
   "skin_luminance": 0.0,
   "curves_points": [[0, 0], [64, 64], [128, 128], [192, 192], [255, 255]],
+  "selective_color": [
+    {"color_range": "neutrals", "cyan": 0, "magenta": 0, "yellow": 0, "black": 0}
+  ],
+  "subject_mask_adjust": {
+    "enabled": true,
+    "exposure_delta": 0.0,
+    "temp_delta": 0.0,
+    "feather_px": 8
+  },
+  "background_mask_adjust": {
+    "enabled": true,
+    "exposure_delta": 0.0,
+    "temp_delta": 0.0,
+    "saturation_delta": 0,
+    "feather_px": 12
+  },
+  "skin_protect_mask": {
+    "enabled": true,
+    "fuzziness": 38,
+    "exposure_delta": 0.0,
+    "temp_delta": 0.0,
+    "feather_px": 6
+  },
+  "finishing": {
+    "high_pass_sharpen": true,
+    "high_pass_radius": 1.8,
+    "high_pass_opacity": 45,
+    "neutral_gray_layer": true,
+    "frequency_separation": false,
+    "freq_sep_radius": 6.0
+  },
+  "distraction_boxes": [
+    {"label": "边缘穿帮元素说明（如左侧路人/右下角柔光箱），无则输出空数组", "box": [0.0, 0.0, 0.1, 0.1]}
+  ],
   "needs_local_inpaint": false,
   "inpaint_region": null,
   "inpaint_prompt": "",
   "summary": "中文简明调色摘要（<=80字）"
 }
-注：inpaint_region 若启用局部去杂物，必须为归一化坐标 [x1, y1, x2, y2] (0.0~1.0)，严禁框选人脸与服设。"""
+强制分区调色原则：
+1. 暗场馆/多灯场照绝不允许靠全局大幅拉 exposure_delta (+0.6以上) 或抬黑场把暗背景拉灰！全局曝光保持克制（[-0.3, +0.4]），把人物提亮放进 subject_mask_adjust，把杂乱背景压暗压冷放进 background_mask_adjust！
+2. 当环境降温（temp_delta < 0）时，必须开启 skin_protect_mask 给肤色轻微提亮微暖，防止人脸与四肢发灰发青！
+3. 必须仔细检查画面四周边缘是否存在穿帮路人、柔光箱、灯架、垃圾，如有请全部标注到 distraction_boxes（归一化坐标 [x1,y1,x2,y2]），并对最抢镜的一处背景杂物（严禁框选 Coser 本人且面积<=35%）设置 needs_local_inpaint=true。"""
 
 
 # ==================== 反馈修订契约 ====================
@@ -304,6 +341,71 @@ def clamp_retouch_plan(raw_plan: Dict[str, Any]) -> Dict[str, Any]:
         inpaint_region = None
         inpaint_prompt = ""
 
+    # 分区蒙版调色与收尾参数安全钳位（主体蒙版 / 背景反选蒙版 / 肤色保护蒙版 / 收尾 / 可选颜色 / 穿帮框）
+    raw_subj = plan.get("subject_mask_adjust") if isinstance(plan.get("subject_mask_adjust"), dict) else {}
+    subject_mask_adjust = {
+        "enabled": bool(raw_subj.get("enabled", False)),
+        "exposure_delta": _clamp_float(raw_subj.get("exposure_delta", 0.0), -1.0, 1.2, "subject_mask.exposure_delta", clamped_fields),
+        "temp_delta": _clamp_float(raw_subj.get("temp_delta", 0.0), -12.0, 12.0, "subject_mask.temp_delta", clamped_fields),
+        "feather_px": _clamp_float(raw_subj.get("feather_px", 8.0), 0.0, 60.0, "subject_mask.feather_px", clamped_fields),
+    }
+
+    raw_bg = plan.get("background_mask_adjust") if isinstance(plan.get("background_mask_adjust"), dict) else {}
+    background_mask_adjust = {
+        "enabled": bool(raw_bg.get("enabled", False)),
+        "exposure_delta": _clamp_float(raw_bg.get("exposure_delta", 0.0), -1.5, 0.8, "background_mask.exposure_delta", clamped_fields),
+        "temp_delta": _clamp_float(raw_bg.get("temp_delta", 0.0), -15.0, 15.0, "background_mask.temp_delta", clamped_fields),
+        "saturation_delta": _clamp_float(raw_bg.get("saturation_delta", 0.0), -40.0, 20.0, "background_mask.saturation_delta", clamped_fields),
+        "feather_px": _clamp_float(raw_bg.get("feather_px", 12.0), 0.0, 80.0, "background_mask.feather_px", clamped_fields),
+    }
+
+    raw_skin = plan.get("skin_protect_mask") if isinstance(plan.get("skin_protect_mask"), dict) else {}
+    skin_protect_mask = {
+        "enabled": bool(raw_skin.get("enabled", False)),
+        "fuzziness": int(round(_clamp_float(raw_skin.get("fuzziness", 38), 10.0, 90.0, "skin_mask.fuzziness", clamped_fields))),
+        "exposure_delta": _clamp_float(raw_skin.get("exposure_delta", 0.0), -0.5, 0.8, "skin_mask.exposure_delta", clamped_fields),
+        "temp_delta": _clamp_float(raw_skin.get("temp_delta", 0.0), -8.0, 10.0, "skin_mask.temp_delta", clamped_fields),
+        "feather_px": _clamp_float(raw_skin.get("feather_px", 6.0), 0.0, 40.0, "skin_mask.feather_px", clamped_fields),
+    }
+
+    raw_fin = plan.get("finishing") if isinstance(plan.get("finishing"), dict) else {}
+    finishing = {
+        "high_pass_sharpen": bool(raw_fin.get("high_pass_sharpen", False)),
+        "high_pass_radius": _clamp_float(raw_fin.get("high_pass_radius", 1.8), 0.5, 6.0, "finishing.high_pass_radius", clamped_fields),
+        "high_pass_opacity": _clamp_float(raw_fin.get("high_pass_opacity", 45.0), 10.0, 85.0, "finishing.high_pass_opacity", clamped_fields),
+        "neutral_gray_layer": bool(raw_fin.get("neutral_gray_layer", False)),
+        "frequency_separation": bool(raw_fin.get("frequency_separation", False)),
+        "freq_sep_radius": _clamp_float(raw_fin.get("freq_sep_radius", 6.0), 2.0, 16.0, "finishing.freq_sep_radius", clamped_fields),
+    }
+
+    safe_selective: List[Dict[str, Any]] = []
+    raw_sc = plan.get("selective_color")
+    if isinstance(raw_sc, list):
+        for sc in raw_sc[:4]:
+            if isinstance(sc, dict) and sc.get("color_range"):
+                safe_selective.append({
+                    "color_range": str(sc["color_range"]).strip().lower(),
+                    "cyan": _clamp_float(sc.get("cyan", 0.0), -30.0, 30.0, "selective_color.cyan", clamped_fields),
+                    "magenta": _clamp_float(sc.get("magenta", 0.0), -30.0, 30.0, "selective_color.magenta", clamped_fields),
+                    "yellow": _clamp_float(sc.get("yellow", 0.0), -30.0, 30.0, "selective_color.yellow", clamped_fields),
+                    "black": _clamp_float(sc.get("black", 0.0), -30.0, 30.0, "selective_color.black", clamped_fields),
+                })
+
+    safe_distractions: List[Dict[str, Any]] = []
+    raw_dist = plan.get("distraction_boxes")
+    if isinstance(raw_dist, list):
+        for item in raw_dist[:8]:
+            if isinstance(item, dict) and isinstance(item.get("box"), (list, tuple)) and len(item["box"]) == 4:
+                try:
+                    bx = [round(max(0.0, min(1.0, float(v))), 4) for v in item["box"]]
+                    if bx[2] > bx[0] and bx[3] > bx[1]:
+                        safe_distractions.append({
+                            "label": str(item.get("label") or "边缘穿帮").strip()[:60],
+                            "box": bx,
+                        })
+                except (TypeError, ValueError):
+                    continue
+
     return {
         "exposure_delta": exposure_delta,
         "temp_delta": temp_delta,
@@ -311,10 +413,16 @@ def clamp_retouch_plan(raw_plan: Dict[str, Any]) -> Dict[str, Any]:
         "hsl_adjustments": safe_hsl,
         "skin_luminance": skin_luminance,
         "curves_points": safe_curves,
+        "selective_color": safe_selective,
+        "subject_mask_adjust": subject_mask_adjust,
+        "background_mask_adjust": background_mask_adjust,
+        "skin_protect_mask": skin_protect_mask,
+        "finishing": finishing,
+        "distraction_boxes": safe_distractions,
         "needs_local_inpaint": needs_inpaint,
         "inpaint_region": inpaint_region,
         "inpaint_prompt": inpaint_prompt,
-        "summary": str(plan.get("summary") or "按 Cosplay 仿色规则生成精修微调方案").strip()[:120],
+        "summary": str(plan.get("summary") or "按 Cosplay 分区蒙版仿色规则生成精修方案").strip()[:120],
         "clamped_fields": sorted(set(clamped_fields)),
     }
 

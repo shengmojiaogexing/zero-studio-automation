@@ -534,6 +534,11 @@ class PSMCPToolkit:
         res = self._eval(jsx)
         return self._record("ps_select_subject", {}, res)
 
+    def ps_deselect(self) -> Dict[str, Any]:
+        jsx = 'app.activeDocument.selection.deselect(); return "deselected";'
+        res = self._eval(jsx)
+        return self._record("ps_deselect", {}, res)
+
     def ps_apply_liquify(
         self,
         face_slim: int = 0,
@@ -654,6 +659,7 @@ class PSMCPToolkit:
             "ps_convert_to_smart_object": self.ps_convert_to_smart_object,
             "ps_apply_high_pass_sharpen": self.ps_apply_high_pass_sharpen,
             "ps_select_subject": self.ps_select_subject,
+            "ps_deselect": self.ps_deselect,
             "ps_apply_liquify": self.ps_apply_liquify,
             "ps_execute_extendscript": self.ps_execute_extendscript,
             "ps_execute_batchplay": self.ps_execute_batchplay,
@@ -911,7 +917,15 @@ class PSMCPToolkit:
                 "type": "function",
                 "function": {
                     "name": "ps_select_subject",
-                    "description": "一键调用 Photoshop 原生「选择主体」抠出人物主体选区。",
+                    "description": "一键调用 Photoshop 原生「选择主体」抠出人物主体选区（之后新建的调整层会自动携带主体蒙版）。",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "ps_deselect",
+                    "description": "取消当前文档选区（切换分区蒙版前必须调用）。",
                     "parameters": {"type": "object", "properties": {}},
                 },
             },
@@ -1124,6 +1138,11 @@ def create_fastmcp_server(dry_run: bool = False):
     def ps_select_subject() -> str:
         """一键调用 Photoshop 原生选择主体。"""
         return json.dumps(kit.ps_select_subject(), ensure_ascii=False)
+
+    @mcp.tool()
+    def ps_deselect() -> str:
+        """取消当前文档选区。"""
+        return json.dumps(kit.ps_deselect(), ensure_ascii=False)
 
     @mcp.tool()
     def ps_apply_liquify(face_slim: int = 0, eye_size: int = 0, jawline: int = 0, convert_smart_first: bool = True) -> str:

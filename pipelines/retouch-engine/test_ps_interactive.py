@@ -58,18 +58,22 @@ def _fallback_histogram_plan(src_preview: Path, ref_path: Optional[Path], notes:
         temp_delta = float(np.clip((ref_rb - src_rb) * 40.0, -10.0, 10.0))
 
     return clamp_retouch_plan({
-        "exposure_delta": round(exp_delta, 3),
+        "exposure_delta": round(min(0.25, exp_delta), 3),
         "temp_delta": round(temp_delta, 3),
         "tint_delta": round(tint_delta, 3),
         "hsl_adjustments": {
-            "oranges": {"hue": 1, "saturation": -5, "luminance": 6},
-            "yellows": {"hue": -4, "saturation": -8, "luminance": 2},
-            "blues": {"hue": -2, "saturation": 6, "luminance": -2},
+            "oranges": {"hue": 1, "saturation": -4, "luminance": 6},
+            "yellows": {"hue": -4, "saturation": -10, "luminance": 2},
+            "blues": {"hue": -2, "saturation": 8, "luminance": 2},
         },
         "skin_luminance": skin_lum,
-        "curves_points": [[0, 6], [64, 60], [128, 132], [192, 198], [255, 250]],
+        "curves_points": [[0, 2], [64, 60], [128, 134], [192, 198], [255, 252]],
         "selective_color": [{"color_range": "neutrals", "cyan": 3, "yellow": -2}],
-        "summary": f"测试方案（{notes or '参考图/基础仿色微调'}）",
+        "subject_mask_adjust": {"enabled": True, "exposure_delta": 0.45, "temp_delta": 1.5, "feather_px": 10},
+        "background_mask_adjust": {"enabled": True, "exposure_delta": -0.55, "temp_delta": -5.0, "saturation_delta": -18, "feather_px": 14},
+        "skin_protect_mask": {"enabled": True, "fuzziness": 38, "exposure_delta": 0.25, "temp_delta": 3.0, "feather_px": 6},
+        "finishing": {"high_pass_sharpen": True, "high_pass_radius": 1.8, "high_pass_opacity": 45, "neutral_gray_layer": True, "frequency_separation": False},
+        "summary": f"分区蒙版测试方案（{notes or '主体提亮+背景压暗+肤色保护+高反差锐化'}）",
     })
 
 
@@ -112,6 +116,7 @@ def run_ps_test(
         out_tiff_path=tiff_path,
         preset_code=preset_code,
         xmp_path=xmp_path,
+        prefer_native_acr=not dry_run,
     )
 
     # 生成 1024px sRGB 给视觉模型看图
