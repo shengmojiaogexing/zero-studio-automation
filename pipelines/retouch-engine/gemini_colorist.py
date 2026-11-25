@@ -42,8 +42,8 @@ HSL_DEFAULT_BOUNDS = {
 # 亚洲人肤色主通道 oranges 实行更严格保护边界
 HSL_SKIN_ORANGE_BOUNDS = {
     "hue": (-8.0, 8.0),
-    "saturation": (-18.0, 15.0),
-    "luminance": (-12.0, 15.0),
+    "saturation": (-22.0, 15.0),
+    "luminance": (-12.0, 28.0),
 }
 MAX_CURVE_DEVIATION = 35
 MAX_INPAINT_AREA_RATIO = 0.35
@@ -66,7 +66,8 @@ GEMINI_JSON_CONTRACT_PROMPT = """你必须严格仅输出一个合法的 JSON �
   "skin_luminance": 0.0,
   "curves_points": [[0, 0], [64, 64], [128, 128], [192, 192], [255, 255]],
   "selective_color": [
-    {"color_range": "neutrals", "cyan": 0, "magenta": 0, "yellow": 0, "black": 0}
+    {"color_range": "reds", "cyan": -4, "magenta": 2, "yellow": -8, "black": -14},
+    {"color_range": "whites", "cyan": -4, "magenta": 0, "yellow": -4, "black": -4}
   ],
   "subject_mask_adjust": {
     "enabled": true,
@@ -193,16 +194,15 @@ def _sanitize_revision_jsx(jsx: str) -> Tuple[bool, str]:
 
 
 def _strip_code_fence(text: str) -> str:
-    """去掉模型可能包裹的 ```json ... ``` 代码块，只保留 JSON 主体。"""
+    """去掉模型可能包裹的 ```json ... ``` 代码块或前后说明，只保留 JSON 主体。"""
     t = (text or "").strip()
-    if not t.startswith("```"):
-        return t
-    t = t.split("\n", 1)[1] if "\n" in t else t
-    if t.endswith("```"):
-        t = t[:-3]
-    t = t.strip()
-    if t.lower().startswith("json"):
-        t = t[4:].lstrip()
+    if t.startswith("```"):
+        t = t.split("\n", 1)[1] if "\n" in t else t
+        if t.endswith("```"):
+            t = t[:-3]
+        t = t.strip()
+        if t.lower().startswith("json"):
+            t = t[4:].lstrip()
     # 兜底：截取第一个 { 到最后一个 }
     start, end = t.find("{"), t.rfind("}")
     if start != -1 and end != -1 and end > start:
@@ -219,7 +219,17 @@ def load_retouch_skills(
     if not sdir.exists():
         return "", []
     md_files = sorted(sdir.glob("*.md"), key=lambda p: p.name.lower())
-    allow_set = {str(x).strip().lower() for x in selected_skills if str(x).strip()} if selected_skills is not None else None
+    allow_set = (
+        {
+            item
+            for raw in selected_skills
+            for s in (str(raw).strip().lower(),)
+            if s
+            for item in (s, s if s.endswith(".md") else f"{s}.md")
+        }
+        if selected_skills is not None
+        else None
+    )
     chunks: List[str] = []
     loaded_names: List[str] = []
     for f in md_files:
@@ -613,7 +623,7 @@ class GeminiColorist:
                     "model": self.model,
                     "messages": [{"role": "user", "content": content}],
                     "temperature": 0.15,
-                    "max_tokens": 1200,
+                    "max_tokens": 8192,
                 }
                 with httpx.Client(timeout=self.timeout) as client:
                     resp = client.post(
@@ -747,7 +757,7 @@ class GeminiColorist:
             "model": self.model,
             "messages": [{"role": "user", "content": content}],
             "temperature": 0.2,
-            "max_tokens": 2500,
+            "max_tokens": 8192,
         }
 
         if self.base_url:
@@ -886,7 +896,7 @@ class GeminiColorist:
             "model": self.model,
             "messages": [{"role": "user", "content": content}],
             "temperature": 0.2,
-            "max_tokens": 2000,
+            "max_tokens": 8192,
         }
 
         endpoint = f"{self.base_url}/chat/completions"
@@ -908,7 +918,32 @@ class GeminiColorist:
         return json.loads(text_out)
 
     @staticmethod
-    def _data_url(image_path: Path) -> str:
+    def _data_url(image_path: Path, max_edge: int = 1024, quality: int = 82) -> str:
+        """将图片安全缩放到 max_edge 以内并压缩为轻量 JPEG，防止超大图触发网关 HTTP 413。"""
+        raw_bytes = image_path.read_bytes()
+        try:
+            import io
+            from PIL import Image, ImageOps
+
+            with Image.open(io.BytesIO(raw_bytes)) as im:
+                im = ImageOps.exif_transpose(im)
+                w, h = im.size
+                needs_resize = max(w, h) > max_edge or len(raw_bytes) > 320 * 1024 or image_path.suffix.lower() not in (".jpg", ".jpeg")
+                if needs_resize:
+                    if im.mode not in ("RGB", "L"):
+                        im = im.convert("RGB")
+                    elif im.mode == "L":
+                        im = im.convert("RGB")
+                    if max(w, h) > max_edge:
+                        im.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+                    buf = io.BytesIO()
+                    im.save(buf, format="JPEG", quality=quality, optimize=True)
+                    raw_bytes = buf.getvalue()
+                    b64 = base64.b64encode(raw_bytes).decode("ascii")
+                    return f"data:image/jpeg;base64,{b64}"
+        except Exception:
+            pass
+
         suffix = image_path.suffix.lower()
         mime = {
             ".png": "image/png",
@@ -916,7 +951,7 @@ class GeminiColorist:
             ".jpeg": "image/jpeg",
             ".webp": "image/webp",
         }.get(suffix, "image/jpeg")
-        b64 = base64.b64encode(image_path.read_bytes()).decode("ascii")
+        b64 = base64.b64encode(raw_bytes).decode("ascii")
         return f"data:{mime};base64,{b64}"
 
     def _call_gemini_rest(

@@ -109,10 +109,13 @@ def run_ps_test(
     run_id = time.strftime("%Y%m%d_%H%M%S")
     out_dir = WORKSPACE_ROOT / "work" / "ps_test_runs" / f"{run_id}_{src.stem}"
     out_dir.mkdir(parents=True, exist_ok=True)
-    tiff_path = out_dir / f"{src.stem}_stage1_16bit.tiff"
-    srgb_preview = out_dir / f"{src.stem}_stage1_srgb1024.jpg"
+    stage1_dir = out_dir / ".stage1_intermediate"
+    stage1_dir.mkdir(parents=True, exist_ok=True)
+    tiff_path = stage1_dir / f"{src.stem}_stage1_16bit.tiff"
+    srgb_preview = stage1_dir / f"{src.stem}_stage1_srgb1024.jpg"
     out_psd = out_dir / f"{src.stem}_retouched.psd"
     out_jpg = out_dir / f"{src.stem}_retouched_preview.jpg"
+    out_full_jpg = out_dir / f"{src.stem}_retouched_full.jpg"
 
     log(f"输出目录: {out_dir}")
     log(f"已勾选 Skill ({len(skills_to_use)}): {', '.join(skills_to_use) if skills_to_use else '（无）'}")
@@ -159,6 +162,17 @@ def run_ps_test(
     else:
         log("2/5 使用本地分区蒙版兜底方案（未启用云端 Key 或演练模式）...")
         plan = _fallback_masked_plan(srgb_preview, ref_path, notes)
+
+    from mcp_planner import compute_base_restore_levels
+
+    base_restore = compute_base_restore_levels(srgb_preview)
+    if base_restore:
+        plan["base_restore"] = base_restore
+        st = base_restore["stats"]
+        log(
+            f"    Step 0 自动画面还原: 检测到 XMP 灰底 (p1={st['p1']}, p99={st['p99']}, std={st['std']})，"
+            f"先以明度色阶 (black={base_restore['black_point']}, white={base_restore['white_point']}, gamma={base_restore['gamma']}) 还原正常反差"
+        )
 
     (out_dir / "plan.json").write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     log(f"    方案摘要: {plan.get('summary')} (来源: {plan_source})")
@@ -209,6 +223,18 @@ def run_ps_test(
         review_fn=review_cb,
     )
 
+    # 导出全尺寸原分辨率 sRGB 成片 JPEG（保留 100% 原始像素，如 5464x8192）
+    if not dry_run and out_psd.exists():
+        try:
+            log("    正在导出全尺寸原分辨率 sRGB 成片 JPG (quality=95)...")
+            toolkit.ps_open_document(str(out_psd))
+            try:
+                toolkit.ps_export_preview(str(out_full_jpg), max_edge=0, quality=95)
+            finally:
+                toolkit.ps_close_document(save_changes=False)
+        except Exception as exc:  # noqa: BLE001
+            log(f"    全尺寸 JPG 导出警告: {exc}")
+
     report = {
         "status": "ok",
         "out_dir": str(out_dir),
@@ -220,12 +246,15 @@ def run_ps_test(
         "steps_count": res.get("steps_count"),
         "checkpoints_count": len(res.get("checkpoints") or []),
         "output_psd_path": str(out_psd),
+        "output_full_jpg_path": str(out_full_jpg) if out_full_jpg.exists() else "",
         "output_preview_path": str(out_jpg),
     }
     (out_dir / "review_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     log(f"5/5 全部完成！执行 {report['steps_count']} 步，检查点 {report['checkpoints_count']} 个，回退修正 {len(report['backtrack_history'] or [])} 次。")
     log(f"    分层 PSD: {out_psd}")
-    log(f"    成品预览: {out_jpg}")
+    if out_full_jpg.exists():
+        log(f"    全尺寸 JPG: {out_full_jpg}")
+    log(f"    1024px 预览: {out_jpg}")
     log(f"    检验报告: {out_dir / 'review_report.json'}")
     return report
 
@@ -295,16 +324,29 @@ def launch_gui() -> None:
             tk.Label(skill_grid, text="（未找到 .md Skill 文件）", fg=muted, bg=card).pack(anchor="w")
             return
         for idx, name in enumerate(names):
-            var = tk.BooleanVar(value=True)
+            is_global = "global_retouch" in name.lower()
+            default_on = is_global or ("bright_low_contrast" in name.lower())
+            var = tk.BooleanVar(value=default_on)
             skill_vars[name] = var
-            cb = tk.Checkbutton(skill_grid, text=name, variable=var, bg=card, fg=fg, selectcolor=bg, activebackground=card, activeforeground=fg, font=("Consolas", 9))
+            label_text = f"[全局底座] {name}" if is_global else name
+            cb = tk.Checkbutton(
+                skill_grid,
+                text=label_text,
+                variable=var,
+                bg=card,
+                fg="#f5d76e" if is_global else fg,
+                selectcolor=bg,
+                activebackground=card,
+                activeforeground=fg,
+                font=("Consolas", 9, "bold" if is_global else "normal"),
+            )
             cb.grid(row=idx // 2, column=idx % 2, sticky="w", padx=(0, 18), pady=2)
 
     skill_btn_row = tk.Frame(skill_card, bg=card)
     skill_btn_row.pack(fill="x", pady=(6, 0))
     tk.Button(skill_btn_row, text="全选", command=lambda: [v.set(True) for v in skill_vars.values()], bg="#2b3648", fg=fg, relief="flat", padx=8, font=("Microsoft YaHei", 8)).pack(side="left")
     tk.Button(skill_btn_row, text="清空", command=lambda: [v.set(False) for v in skill_vars.values()], bg="#2b3648", fg=fg, relief="flat", padx=8, font=("Microsoft YaHei", 8)).pack(side="left", padx=6)
-    tk.Button(skill_btn_row, text="仅选亮调低反差", command=lambda: [v.set("bright_low_contrast" in k) for k, v in skill_vars.items()], bg="#2b3648", fg="#79b8b2", relief="flat", padx=8, font=("Microsoft YaHei", 8)).pack(side="left")
+    tk.Button(skill_btn_row, text="全局底座 + 亮调低反差", command=lambda: [v.set(("global_retouch" in k.lower()) or ("bright_low_contrast" in k.lower())) for k, v in skill_vars.items()], bg="#2b3648", fg="#79b8b2", relief="flat", padx=8, font=("Microsoft YaHei", 8)).pack(side="left")
     tk.Button(skill_btn_row, text="刷新 Skill", command=refresh_skills, bg="#2b3648", fg=fg, relief="flat", padx=8, font=("Microsoft YaHei", 8)).pack(side="right")
     refresh_skills()
 

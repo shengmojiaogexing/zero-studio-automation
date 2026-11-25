@@ -12,7 +12,7 @@
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](#快速开始)
 [![Node.js](https://img.shields.io/badge/node.js-18%2B-green)](#快速开始)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Android-lightgrey)](#快速开始)
-[![PS%20%2F%20MCP](https://img.shields.io/badge/PS%20MCP%20%26%20Skills-%E5%B0%9A%E6%9C%AA%E5%AE%8C%E6%95%B4%20%C2%B7%20%E6%8C%81%E7%BB%AD%E6%9B%B4%E6%96%B0-yellow)](#photoshop-自动化与-mcp-修图调用现状非最终版)
+[![PS%20%2F%20MCP](https://img.shields.io/badge/AI%20Retouch-%E6%97%A9%E6%9C%9F%E5%AE%9E%E9%AA%8C%20%C2%B7%20%E5%9F%BA%E6%9C%AC%E4%B8%8D%E5%8F%AF%E7%94%A8-red)](#photoshop-自动化与-mcp-修图调用现状非最终版)
 
 </div>
 
@@ -23,10 +23,12 @@
 > 本项目为**个人、非官方、非商业**的开源摄影自动化研究工具，按 GPL-3.0 协议「按现状（AS-IS）」提供，**不提供、不分发**任何商业软件或闭源客户端（如 Photoshop、微信/QQ 安装包等）。使用第三方 IM 接口存在平台风控与封禁风险，请严格遵守各平台用户协议及当地法律法规，一切使用后果由使用者自行承担。
 
 > [!WARNING]
-> **当前版本说明（非最终版 / WIP）**
+> **当前版本说明（非最终版 / WIP）—— ⚠️ 自动修图模块目前基本不可用**
 > 本项目仍处于持续迭代阶段，**并非最终完整版**：
-> 1. **修图 Skill**（`configs/retouch_skills/*.md`）目前仅为基础基线版本，针对细分光比、肤质/假发/道具保护、复杂场景仿色的规则**尚未完整，需等待后续更新**；
-> 2. **Photoshop 的 MCP 调用与自动化修图链路**目前也**还不是最终版**（当前已落地 Windows COM + ExtendScript 零干预驱动与 UXP 队列轮询桥接，标准 PS MCP 工具化调用、精细人像精修动作与多轮视觉自检闭环仍在演进中）；
+> 1. **⚠️ 自动修图模块（`pipelines/retouch-engine/`）目前基本不可用**：
+>    - 虽然 Photoshop COM / MCP 工具调用、原生 ACR 16-bit 解码、全尺寸导出、检查点回溯与 PSAI 蒙版贴片等**底层通道已打通**，但**实际自动调色、肤色还原与跨场景通用出片质量目前仍基本不可用**；
+>    - 行为准则与通用修图规范（`configs/retouch_skills/*.md`）正在等待作者人工重写与打磨，**请勿将当前自动修图结果直接用于商业交付**。
+> 2. **Photoshop 的 MCP 调用与局部 AI 融合链路**仍在实验演进中，仅作技术架构验证与测试实验室调试使用。
 > 3. **接单人设 Skill 与提示词**（私聊真人化接单、群聊拓客打分、本地小模型前置守门）当前为可用初版，多场景话术与边界兜底**尚未完整，需等待后续更新**。
 
 > [!IMPORTANT]

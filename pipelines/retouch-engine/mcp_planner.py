@@ -64,6 +64,8 @@ ALLOWED_PLANNER_TOOLS = {
     "ps_execute_extendscript",
     "ps_execute_batchplay",
     "ps_get_canvas_preview",
+    "ps_place_image_with_mask",
+    "ps_ai_generate_masked_patch",
 }
 
 LOCAL_8B_PLANNER_SYSTEM_PROMPT = """你是 ZERO STUDIO 的本地 Photoshop MCP 执行拆解器（8B 工具调用模型）。
@@ -92,16 +94,16 @@ def compile_bright_low_contrast_stack(layer_prefix: str = "BLC") -> List[Dict[st
       5. 仅针对主体的高反差保留锐化 (2.0px, 线性光 30% + 主体蒙版不锐化背景)
     """
     return [
-        # 1a. 背景反选 -> 色阶压平反差（明度混合模式）
+        # 1a. 背景反选 -> 色阶微调反差（明度混合模式，output_black=0 避免叠在 XMP 低反差底图上二次抬灰）
         {"name": "ps_select_subject", "arguments": {}},
-        {"name": "ps_modify_selection", "arguments": {"feather_px": 12.0, "invert": True}},
-        {"name": "ps_add_levels_layer", "arguments": {"black_point": 8, "gamma": 1.0, "white_point": 245, "output_black": 10, "output_white": 240, "layer_name": f"{layer_prefix}_BG_Levels_Luma"}},
-        {"name": "ps_set_layer_blend_opacity", "arguments": {"blend_mode": "luminosity", "opacity": 100.0}},
+        {"name": "ps_modify_selection", "arguments": {"feather_px": 10.0, "invert": True}},
+        {"name": "ps_add_levels_layer", "arguments": {"black_point": 6, "gamma": 0.96, "white_point": 248, "output_black": 0, "output_white": 245, "layer_name": f"{layer_prefix}_BG_Levels_Luma"}},
+        {"name": "ps_set_layer_blend_opacity", "arguments": {"blend_mode": "luminosity", "opacity": 80.0}},
         {"name": "ps_deselect", "arguments": {}},
-        # 1b. 背景反选 -> 自然饱和度大幅降低 (-65)
+        # 1b. 背景反选 -> 自然饱和度大幅降低（彻底去除红/黄/绿/品红杂色，还原纯净中性冷灰）
         {"name": "ps_select_subject", "arguments": {}},
-        {"name": "ps_modify_selection", "arguments": {"feather_px": 12.0, "invert": True}},
-        {"name": "ps_add_vibrance_layer", "arguments": {"vibrance": -65, "saturation": -10, "layer_name": f"{layer_prefix}_BG_Vibrance"}},
+        {"name": "ps_modify_selection", "arguments": {"feather_px": 10.0, "invert": True}},
+        {"name": "ps_add_vibrance_layer", "arguments": {"vibrance": -70, "saturation": -25, "layer_name": f"{layer_prefix}_BG_Vibrance"}},
         {"name": "ps_deselect", "arguments": {}},
         # 1c. 背景反选 -> 分通道 HSL 压制（消除背景红牌子/绿杂色，保留暖调氛围）
         {"name": "ps_select_subject", "arguments": {}},
@@ -141,8 +143,8 @@ def compile_bright_low_contrast_stack(layer_prefix: str = "BLC") -> List[Dict[st
         {"name": "ps_modify_selection", "arguments": {"feather_px": 8.0, "invert": False}},
         {"name": "ps_add_vibrance_layer", "arguments": {"vibrance": 16, "saturation": 0, "layer_name": f"{layer_prefix}_Subject_Vibrance"}},
         {"name": "ps_deselect", "arguments": {}},
-        # 4. 空气感高光辉光 + 50% 双中性灰柔光层
-        {"name": "ps_add_ambient_glow_layer", "arguments": {"opacity": 18.0, "blend_mode": "screen", "layer_name": f"{layer_prefix}_AmbientGlow"}},
+        # 4. 轻柔空气感高光辉光（7% 通透不发雾）+ 50% 双中性灰柔光层
+        {"name": "ps_add_ambient_glow_layer", "arguments": {"opacity": 7.0, "blend_mode": "screen", "layer_name": f"{layer_prefix}_AmbientGlow"}},
         {"name": "ps_create_neutral_gray_layer", "arguments": {"layer_name": f"{layer_prefix}_NeutralGray", "blend_mode": "softlight", "opacity": 100.0}},
         # 5. 仅针对主体的高反差保留锐化（2.0px, 线性光 30% + 主体蒙版不锐化背景）
         {"name": "ps_apply_high_pass_sharpen", "arguments": {"radius": 2.0, "blend_mode": "linearlight", "opacity": 30.0, "layer_name": f"{layer_prefix}_Subject_HighPass"}},
@@ -150,6 +152,48 @@ def compile_bright_low_contrast_stack(layer_prefix: str = "BLC") -> List[Dict[st
         {"name": "ps_add_layer_mask_from_selection", "arguments": {"invert": False}},
         {"name": "ps_deselect", "arguments": {}},
     ]
+
+
+def compute_base_restore_levels(preview_image_path: Optional[Path]) -> Optional[Dict[str, Any]]:
+    """
+    Step 0 自动画面还原检测器：
+    分析 Stage 1 底图直方图分位数（p1 暗部黑场 / p99 高光白场），
+    若因 ACR/XMP 压平导致黑场悬空（p1 > 22）或白场发闷（p99 < 228），
+    自动计算非破坏性明度色阶参数，先将灰底还原为黑白扎实、高光通透的正常画面。
+    """
+    if not preview_image_path or not Path(preview_image_path).exists():
+        return None
+    try:
+        import numpy as np
+        from PIL import Image
+
+        with Image.open(preview_image_path) as im:
+            arr = np.asarray(im.convert("RGB"), dtype=np.float32)
+        luma = 0.2126 * arr[:, :, 0] + 0.7152 * arr[:, :, 1] + 0.0722 * arr[:, :, 2]
+        p1, p50, p99 = [float(x) for x in np.percentile(luma, [1, 50, 99])]
+        std = float(luma.std())
+
+        need_black = p1 > 22.0
+        need_white = p99 < 228.0
+        if not (need_black or need_white):
+            return None
+
+        # 极克制去灰：仅轻压悬空黑场消除灰雾，严禁大幅下压 white_point 冲爆白衣/白鞋高光
+        black_point = int(max(0, min(16, round((p1 - 18.0) * 0.65)))) if need_black else 0
+        white_point = int(max(242, min(255, round(p99 + (255.0 - p99) * 0.82)))) if need_white else 255
+        gamma = 1.02 if p50 < 85.0 else 1.0
+        return {
+            "enabled": True,
+            "black_point": black_point,
+            "gamma": gamma,
+            "white_point": white_point,
+            "output_black": 0,
+            "output_white": 255,
+            "opacity": 60.0,
+            "stats": {"p1": round(p1, 1), "p50": round(p50, 1), "p99": round(p99, 1), "std": round(std, 1)},
+        }
+    except Exception:
+        return None
 
 
 def compile_plan_to_mcp_calls(
@@ -164,6 +208,28 @@ def compile_plan_to_mcp_calls(
     safe = clamp_retouch_plan(plan)
     calls: List[Dict[str, Any]] = []
 
+    # Step 0: 若输入底图发灰（黑场悬空 / 白场偏闷），先用明度色阶还原正常画面反差与通透度
+    base_restore = plan.get("base_restore")
+    if isinstance(base_restore, dict) and base_restore.get("enabled"):
+        calls.append({
+            "name": "ps_add_levels_layer",
+            "arguments": {
+                "black_point": int(base_restore.get("black_point", 0)),
+                "gamma": float(base_restore.get("gamma", 1.02)),
+                "white_point": int(base_restore.get("white_point", 255)),
+                "output_black": int(base_restore.get("output_black", 0)),
+                "output_white": int(base_restore.get("output_white", 255)),
+                "layer_name": f"{layer_prefix}_Step0_BaseRestore",
+            },
+        })
+        calls.append({
+            "name": "ps_set_layer_blend_opacity",
+            "arguments": {
+                "blend_mode": "luminosity",
+                "opacity": float(base_restore.get("opacity", 88.0)),
+            },
+        })
+
     if abs(float(safe.get("exposure_delta") or 0.0)) > 1e-3:
         calls.append({
             "name": "ps_add_exposure_layer",
@@ -174,14 +240,33 @@ def compile_plan_to_mcp_calls(
         })
 
     if abs(float(safe.get("temp_delta") or 0.0)) > 1e-2 or abs(float(safe.get("tint_delta") or 0.0)) > 1e-2:
-        calls.append({
-            "name": "ps_add_color_balance_layer",
-            "arguments": {
-                "temp_delta": safe["temp_delta"],
-                "tint_delta": safe["tint_delta"],
-                "layer_name": f"{layer_prefix}_ColorBalance",
-            },
-        })
+        bg_cfg = safe.get("background_mask_adjust") or {}
+        bg_enabled = isinstance(bg_cfg, dict) and bool(bg_cfg.get("enabled"))
+        # 当启用主体/背景分区时，将较大幅度的色彩平衡（尤其是正 tint 补粉）克制在全局或仅作用于主体，避免把中性灰背景染成粉紫灰
+        g_temp = float(safe["temp_delta"])
+        g_tint = float(safe["tint_delta"])
+        if bg_enabled and abs(g_tint) > 3.0:
+            calls.append({"name": "ps_select_subject", "arguments": {}})
+            calls.append({"name": "ps_modify_selection", "arguments": {"feather_px": 6.0, "invert": False}})
+            calls.append({
+                "name": "ps_add_color_balance_layer",
+                "arguments": {
+                    "temp_delta": g_temp,
+                    "tint_delta": max(-4.0, min(4.0, g_tint * 0.5)),
+                    "layer_name": f"{layer_prefix}_Subject_ColorBalance",
+                },
+            })
+            calls.append({"name": "ps_set_layer_blend_opacity", "arguments": {"blend_mode": "color", "opacity": 65.0}})
+            calls.append({"name": "ps_deselect", "arguments": {}})
+        else:
+            calls.append({
+                "name": "ps_add_color_balance_layer",
+                "arguments": {
+                    "temp_delta": g_temp,
+                    "tint_delta": max(-3.0, min(3.0, g_tint)),
+                    "layer_name": f"{layer_prefix}_ColorBalance",
+                },
+            })
 
     curves = safe.get("curves_points") or []
     is_identity = len(curves) >= 2 and all(abs(int(p[0]) - int(p[1])) <= 1 for p in curves)
@@ -228,36 +313,39 @@ def compile_plan_to_mcp_calls(
                     },
                 })
 
-    # 5. 主体蒙版分区调色（ps_select_subject -> 羽化 -> 调整层自动带主体蒙版 -> 取消选区）
+    # 5. 主体蒙版分区调色（忠实执行 AI 规划的主体参数，明度/颜色分离防偏色）
     subj = safe.get("subject_mask_adjust") or {}
     if isinstance(subj, dict) and subj.get("enabled"):
-        s_exp = float(subj.get("exposure_delta") or 0.0)
-        s_temp = float(subj.get("temp_delta") or 0.0)
+        s_exp = max(-0.6, min(0.6, float(subj.get("exposure_delta") or 0.0)))
+        s_temp = max(-8.0, min(8.0, float(subj.get("temp_delta") or 0.0)))
         s_feather = float(subj.get("feather_px") or 8.0)
         if abs(s_exp) > 1e-3:
             calls.append({"name": "ps_select_subject", "arguments": {}})
             if s_feather > 0:
                 calls.append({"name": "ps_modify_selection", "arguments": {"feather_px": s_feather, "invert": False}})
             calls.append({"name": "ps_add_exposure_layer", "arguments": {"exposure_delta": s_exp, "layer_name": f"{layer_prefix}_Subject_Exposure"}})
+            calls.append({"name": "ps_set_layer_blend_opacity", "arguments": {"blend_mode": "luminosity", "opacity": 85.0}})
             calls.append({"name": "ps_deselect", "arguments": {}})
         if abs(s_temp) > 1e-2:
             calls.append({"name": "ps_select_subject", "arguments": {}})
             if s_feather > 0:
                 calls.append({"name": "ps_modify_selection", "arguments": {"feather_px": s_feather, "invert": False}})
             calls.append({"name": "ps_add_color_balance_layer", "arguments": {"temp_delta": s_temp, "tint_delta": 0.0, "layer_name": f"{layer_prefix}_Subject_Color"}})
+            calls.append({"name": "ps_set_layer_blend_opacity", "arguments": {"blend_mode": "color", "opacity": 65.0}})
             calls.append({"name": "ps_deselect", "arguments": {}})
 
-    # 6. 背景反选压暗分区（ps_select_subject -> 反选羽化 -> 调整层自动带背景蒙版 -> 取消选区）
+    # 6. 背景反选分区（忠实按 AI 规划值执行，不强行放大，通用适配漫展/日落/汉服/棚拍/暗调等所有风格）
     bg = safe.get("background_mask_adjust") or {}
     if isinstance(bg, dict) and bg.get("enabled"):
-        b_exp = float(bg.get("exposure_delta") or 0.0)
-        b_temp = float(bg.get("temp_delta") or 0.0)
-        b_sat = float(bg.get("saturation_delta") or 0.0)
+        b_exp = max(-0.8, min(0.6, float(bg.get("exposure_delta") or 0.0)))
+        b_temp = max(-10.0, min(10.0, float(bg.get("temp_delta") or 0.0)))
+        b_sat = max(-60.0, min(30.0, float(bg.get("saturation_delta") or 0.0)))
         b_feather = float(bg.get("feather_px") or 12.0)
         if abs(b_exp) > 1e-3:
             calls.append({"name": "ps_select_subject", "arguments": {}})
             calls.append({"name": "ps_modify_selection", "arguments": {"feather_px": b_feather, "invert": True}})
             calls.append({"name": "ps_add_exposure_layer", "arguments": {"exposure_delta": b_exp, "layer_name": f"{layer_prefix}_BG_Exposure"}})
+            calls.append({"name": "ps_set_layer_blend_opacity", "arguments": {"blend_mode": "luminosity", "opacity": 85.0}})
             calls.append({"name": "ps_deselect", "arguments": {}})
         if abs(b_temp) > 1e-2:
             calls.append({"name": "ps_select_subject", "arguments": {}})
@@ -268,14 +356,11 @@ def compile_plan_to_mcp_calls(
             calls.append({"name": "ps_select_subject", "arguments": {}})
             calls.append({"name": "ps_modify_selection", "arguments": {"feather_px": b_feather, "invert": True}})
             calls.append({
-                "name": "ps_add_hsl_layer",
+                "name": "ps_add_vibrance_layer",
                 "arguments": {
-                    "hsl_adjustments": {
-                        "yellows": {"hue": 0, "saturation": b_sat, "luminance": 0},
-                        "greens": {"hue": 0, "saturation": b_sat, "luminance": 0},
-                    },
-                    "skin_luminance": 0.0,
-                    "layer_name": f"{layer_prefix}_BG_Desat",
+                    "vibrance": int(round(b_sat)),
+                    "saturation": int(round(b_sat * 0.35)),
+                    "layer_name": f"{layer_prefix}_BG_Vibrance",
                 },
             })
             calls.append({"name": "ps_deselect", "arguments": {}})
@@ -757,8 +842,12 @@ class Local8BMCPPlanner:
                 self.toolkit.ps_open_document(str(rollback_psd))
                 try:
                     for fstep in fix_calls:
-                        res = self.toolkit.dispatch_tool(fstep["name"], fstep["arguments"])
-                        fix_executed.append({"tool": fstep["name"], "args": fstep["arguments"], "status": res.get("status", "ok")})
+                        try:
+                            res = self.toolkit.dispatch_tool(fstep["name"], fstep["arguments"])
+                            fix_executed.append({"tool": fstep["name"], "args": fstep["arguments"], "status": res.get("status", "ok")})
+                        except Exception as fexc:  # noqa: BLE001
+                            warnings.append(f"backtrack {fstep['name']} skipped: {fexc}")
+                            fix_executed.append({"tool": fstep["name"], "args": fstep["arguments"], "status": "error", "error": str(fexc)})
                     self.toolkit.ps_save_psd(str(out_psd_path))
                     self.toolkit.ps_export_preview(str(out_preview_jpg), max_edge=1024, quality=92)
                 finally:

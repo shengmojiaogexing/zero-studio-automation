@@ -357,11 +357,25 @@ def build_high_pass_sharpen_jsx(
 
 
 def build_select_subject_jsx() -> str:
-    """一键调用 Photoshop 原生「选择主体 (Select Subject)」。"""
+    """一键调用 Photoshop 原生「选择主体 (Select Subject)」（自动采样所有图层，纯色/中性灰层下亦安全兜底）。"""
     return """
+    var doc = app.activeDocument;
+    var origLayer = doc.activeLayer;
     var d = new ActionDescriptor();
-    d.putBoolean(stringIDToTypeID("sampleAllLayers"), false);
-    executeAction(stringIDToTypeID("autoCutout"), d, DialogModes.NO);
+    d.putBoolean(stringIDToTypeID("sampleAllLayers"), true);
+    try {
+        executeAction(stringIDToTypeID("autoCutout"), d, DialogModes.NO);
+    } catch (e1) {
+        try {
+            var bottom = doc.artLayers[doc.artLayers.length - 1];
+            doc.activeLayer = bottom;
+            var d2 = new ActionDescriptor();
+            d2.putBoolean(stringIDToTypeID("sampleAllLayers"), false);
+            executeAction(stringIDToTypeID("autoCutout"), d2, DialogModes.NO);
+        } finally {
+            try { doc.activeLayer = origLayer; } catch (e2) {}
+        }
+    }
     return "subject_selected";
     """
 

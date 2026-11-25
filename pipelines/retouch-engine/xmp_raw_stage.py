@@ -206,7 +206,8 @@ def _convert_raw_via_photoshop_acr(
     staged_xmp = staged_raw.with_suffix(".xmp")
     try:
         shutil.copy2(nas_raw_path, staged_raw)
-        shutil.copy2(resolved_xmp, staged_xmp)
+        if resolved_xmp is not None and Path(resolved_xmp).exists():
+            shutil.copy2(resolved_xmp, staged_xmp)
         jsx = f"""
         var rawFile = new File({_js_str(_ps_path(staged_raw))});
         var tiffFile = new File({_js_str(_ps_path(out_tiff_path))});
@@ -226,12 +227,22 @@ def _convert_raw_via_photoshop_acr(
         """
         bridge = PSCOMBridge()
         bridge._eval_jsx(jsx)
-        if out_tiff_path.exists() and out_tiff_path.stat().st_size > 1024:
-            logger.info("已通过 Photoshop 原生 ACR 静默解码 RAW+XMP -> 16-bit TIFF: %s", out_tiff_path.name)
+        # Photoshop Windows 使用 TiffSaveOptions + Extension.LOWERCASE 会将 .tiff 规范为 .tif
+        actual_tif = out_tiff_path
+        if not actual_tif.exists():
+            alt_tif = out_tiff_path.with_suffix(".tif")
+            if alt_tif.exists() and alt_tif.stat().st_size > 1024:
+                try:
+                    alt_tif.rename(out_tiff_path)
+                    actual_tif = out_tiff_path
+                except Exception:
+                    actual_tif = alt_tif
+        if actual_tif.exists() and actual_tif.stat().st_size > 1024:
+            logger.info("已通过 Photoshop 原生 ACR 静默解码 RAW+XMP -> 16-bit TIFF: %s", actual_tif.name)
             return {
-                "tiff_path": str(out_tiff_path),
+                "tiff_path": str(actual_tif),
                 "backend": "photoshop-native-acr:16bit-tiff",
-                "xmp_used": str(resolved_xmp),
+                "xmp_used": str(resolved_xmp) if resolved_xmp else "",
                 "bit_depth": 16,
             }
     except Exception as exc:  # noqa: BLE001
@@ -266,8 +277,8 @@ def convert_raw_with_xmp_to_tiff(
     resolved_xmp: Optional[Path] = xmp_path if (xmp_path and Path(xmp_path).exists()) else preset_entry.get("resolved_xmp_path")
     out_tiff_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 0. Windows 优先调用本机 Photoshop 原生 Adobe Camera Raw 静默解码（100% 还原 XMP 校准/分级/曲线/蒙版）
-    if prefer_native_acr and nas_raw_path.suffix.lower() in RAW_EXTENSIONS and resolved_xmp is not None:
+    # 0. Windows 优先调用本机 Photoshop 原生 Adobe Camera Raw 静默解码（无论是否传 XMP，均走原生 16-bit ACR）
+    if prefer_native_acr and nas_raw_path.suffix.lower() in RAW_EXTENSIONS:
         native_res = _convert_raw_via_photoshop_acr(nas_raw_path, resolved_xmp, out_tiff_path)
         if native_res is not None:
             return native_res
@@ -290,7 +301,7 @@ def convert_raw_with_xmp_to_tiff(
             return {
                 "tiff_path": str(out_tiff_path),
                 "backend": "darktable-cli:16bit-tiff",
-                "xmp_used": str(resolved_xmp),
+                "xmp_used": str(resolved_xmp) if resolved_xmp else "",
                 "bit_depth": 16,
             }
 
@@ -303,7 +314,7 @@ def convert_raw_with_xmp_to_tiff(
             return {
                 "tiff_path": str(out_tiff_path),
                 "backend": "acr-cli:16bit-tiff",
-                "xmp_used": str(resolved_xmp),
+                "xmp_used": str(resolved_xmp) if resolved_xmp else "",
                 "bit_depth": 16,
             }
 

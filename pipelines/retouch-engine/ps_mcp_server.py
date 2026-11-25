@@ -351,19 +351,15 @@ class PSMCPToolkit:
         return self._record("ps_save_psd", {"output_psd_path": str(out)}, res)
 
     def ps_export_preview(self, output_jpg_path: str, max_edge: int = 1024, quality: int = 92) -> Dict[str, Any]:
+        """导出 sRGB JPEG；当 max_edge <= 0 时保持原图全分辨率导出（不缩放）。"""
         out = Path(output_jpg_path)
         if not self.dry_run:
             out.parent.mkdir(parents=True, exist_ok=True)
         q_ps = max(1, min(12, int(round(int(quality) / 100.0 * 12))))
-        edge = max(256, min(4096, int(max_edge)))
-        jsx = f"""
-        var origDoc = app.activeDocument;
-        var dup = origDoc.duplicate("zs_preview_tmp", true);
-        try {{
-            dup.convertProfile("sRGB IEC61966-2.1", Intent.PERCEPTUAL, true, false);
-            if (dup.bitsPerChannel !== BitsPerChannelType.EIGHT) {{
-                dup.bitsPerChannel = BitsPerChannelType.EIGHT;
-            }}
+        edge = 0 if int(max_edge) <= 0 else max(256, min(16384, int(max_edge)))
+        resize_js = ""
+        if edge > 0:
+            resize_js = f"""
             var w = dup.width.as("px");
             var h = dup.height.as("px");
             if (Math.max(w, h) > {edge}) {{
@@ -373,6 +369,16 @@ class PSMCPToolkit:
                     dup.resizeImage(null, UnitValue({edge}, "px"), null, ResampleMethod.BICUBICSHARPER);
                 }}
             }}
+            """
+        jsx = f"""
+        var origDoc = app.activeDocument;
+        var dup = origDoc.duplicate("zs_preview_tmp", true);
+        try {{
+            dup.convertProfile("sRGB IEC61966-2.1", Intent.PERCEPTUAL, true, false);
+            if (dup.bitsPerChannel !== BitsPerChannelType.EIGHT) {{
+                dup.bitsPerChannel = BitsPerChannelType.EIGHT;
+            }}
+            {resize_js}
             var jpgFile = new File({_js_str(_ps_path(out))});
             var jpgOpts = new JPEGSaveOptions();
             jpgOpts.quality = {q_ps};
@@ -682,11 +688,316 @@ class PSMCPToolkit:
         }
         return self._record("ps_get_canvas_preview", {"max_edge": max_edge, "return_base64": return_base64}, res)
 
+    def _apply_patch_mask(
+        self,
+        mask_mode: str = "skin",
+        bbox: Optional[Sequence[float]] = None,
+        feather_px: float = 12.0,
+        fuzziness: int = 40,
+    ) -> str:
+        """为当前顶层 AI 贴片图层强制建立精准蒙版（绝不整图无蒙版覆盖）。"""
+        mode = str(mask_mode or "skin").strip().lower()
+        if mode not in ("skin", "subject", "background", "bbox", "hidden"):
+            mode = "skin"
+        f_px = _clamp(feather_px, 0.0, 80.0)
+
+        if mode == "hidden":
+            jsx = """
+            var doc = app.activeDocument;
+            doc.selection.selectAll();
+            var d = new ActionDescriptor();
+            d.putClass(charIDToTypeID("Nw  "), charIDToTypeID("Chnl"));
+            var r = new ActionReference();
+            r.putEnumerated(charIDToTypeID("Chnl"), charIDToTypeID("Chnl"), charIDToTypeID("Msk "));
+            d.putReference(charIDToTypeID("At  "), r);
+            d.putEnumerated(charIDToTypeID("Usng"), charIDToTypeID("UsrM"), charIDToTypeID("HdSl"));
+            executeAction(charIDToTypeID("Mk  "), d, DialogModes.NO);
+            doc.selection.deselect();
+            return "mask:hidden";
+            """
+            self._eval(jsx)
+            return "hidden"
+
+        if mode == "bbox" and bbox and len(bbox) == 4:
+            x1, y1, x2, y2 = [max(0.0, min(1.0, float(v))) for v in bbox]
+            jsx = f"""
+            var doc = app.activeDocument;
+            var w = doc.width.as("px");
+            var h = doc.height.as("px");
+            var region = [[w * {x1}, h * {y1}], [w * {x2}, h * {y1}], [w * {x2}, h * {y2}], [w * {x1}, h * {y2}]];
+            doc.selection.select(region);
+            try {{ doc.selection.feather(UnitValue({f_px}, "px")); }} catch (e) {{}}
+            return "bbox_selected";
+            """
+            self._eval(jsx)
+            self.ps_add_layer_mask_from_selection(invert=False)
+            self.ps_deselect()
+            return f"bbox:{x1:.2f},{y1:.2f},{x2:.2f},{y2:.2f}"
+
+        if mode == "skin":
+            self.ps_select_color_range(preset="skinTones", fuzziness=int(_clamp(fuzziness, 15, 80)))
+            if f_px > 0:
+                self.ps_modify_selection(feather_px=f_px, invert=False)
+            self.ps_add_layer_mask_from_selection(invert=False)
+            self.ps_deselect()
+            return "skin"
+
+        if mode == "subject":
+            self.ps_select_subject()
+            if f_px > 0:
+                self.ps_modify_selection(feather_px=f_px, invert=False)
+            self.ps_add_layer_mask_from_selection(invert=False)
+            self.ps_deselect()
+            return "subject"
+
+        # background
+        self.ps_select_subject()
+        self.ps_modify_selection(feather_px=f_px, invert=True)
+        self.ps_add_layer_mask_from_selection(invert=False)
+        self.ps_deselect()
+        return "background"
+
+    def ps_place_image_with_mask(
+        self,
+        image_path: str,
+        mask_mode: str = "skin",
+        bbox: Optional[Sequence[float]] = None,
+        opacity: float = 65.0,
+        blend_mode: str = "normal",
+        feather_px: float = 12.0,
+        layer_name: str = "ZS_AI_MaskedPatch",
+    ) -> Dict[str, Any]:
+        """将外部/AI 生成的精修参考图置入当前画布独立图层，并强制套用局部蒙版（skin/subject/background/bbox/hidden），绝不整图覆盖原图。"""
+        img_p = Path(image_path)
+        if not self.dry_run and not img_p.exists():
+            raise FileNotFoundError(f"待置入图片不存在: {img_p}")
+        op = _clamp(opacity, 10.0, 90.0)
+        place_jsx = f"""
+        var doc = app.activeDocument;
+        var f = new File({_js_str(_ps_path(img_p))});
+        var idPlc = charIDToTypeID("Plc ");
+        var desc = new ActionDescriptor();
+        desc.putPath(charIDToTypeID("null"), f);
+        desc.putEnumerated(charIDToTypeID("FTcs"), charIDToTypeID("QCSt"), charIDToTypeID("Qcsa"));
+        executeAction(idPlc, desc, DialogModes.NO);
+        var lyr = doc.activeLayer;
+        lyr.name = {_js_str(layer_name)};
+        // 对齐撑满原画布，确保与底层像素 1:1 严丝合缝
+        var b = lyr.bounds;
+        var lw = b[2].as("px") - b[0].as("px");
+        var lh = b[3].as("px") - b[1].as("px");
+        var dw = doc.width.as("px");
+        var dh = doc.height.as("px");
+        if (lw > 0 && lh > 0) {{
+            lyr.resize((dw / lw) * 100.0, (dh / lh) * 100.0, AnchorPosition.MIDDLECENTER);
+        }}
+        var b2 = lyr.bounds;
+        lyr.translate(-b2[0].as("px"), -b2[1].as("px"));
+        return "placed:" + lyr.name;
+        """
+        place_res = self._eval(place_jsx)
+        applied_mask = self._apply_patch_mask(mask_mode=mask_mode, bbox=bbox, feather_px=feather_px)
+        self.ps_set_layer_blend_opacity(blend_mode=blend_mode, opacity=op, layer_name=layer_name)
+        return self._record(
+            "ps_place_image_with_mask",
+            {"image_path": str(img_p), "mask_mode": applied_mask, "opacity": op, "blend_mode": blend_mode, "layer_name": layer_name},
+            {"status": "ok", "place": place_res, "mask": applied_mask},
+        )
+
+    def ps_ai_generate_masked_patch(
+        self,
+        prompt: str,
+        mask_mode: str = "skin",
+        bbox: Optional[Sequence[float]] = None,
+        opacity: float = 60.0,
+        blend_mode: str = "normal",
+        feather_px: float = 12.0,
+        layer_name: str = "ZS_AI_Skin_Patch",
+    ) -> Dict[str, Any]:
+        """调用本机 PSAI 插件（ZERO-STUDIO-PS-Plugin）或 .env 图像编辑 API 生成局部精修素材，再通过蒙版仅保留所需区域（绝不整图 AI 覆盖）。"""
+        clean_prompt = str(prompt or "").strip()
+        if not clean_prompt:
+            raise ValueError("ps_ai_generate_masked_patch 必须提供 prompt")
+        op = _clamp(opacity, 10.0, 90.0)
+        if self.dry_run:
+            return self._record(
+                "ps_ai_generate_masked_patch",
+                {"prompt": clean_prompt, "mask_mode": mask_mode, "opacity": op, "blend_mode": blend_mode, "layer_name": layer_name},
+                {"status": "ok", "backend": "dry_run", "mask": mask_mode},
+            )
+
+        # 导出当前画布 1024px 预览图作为图生图参考输入
+        tmp_dir = Path(tempfile.gettempdir()) / "zs_ai_patches"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        src_jpg = tmp_dir / f"src_{os.getpid()}.jpg"
+        prev = self.ps_get_canvas_preview(max_edge=1024, return_base64=True, output_path=str(src_jpg))
+        src_data_url = prev.get("image_data_url", "")
+
+        # 通道 A：优先调用本机已打开的 ZERO-STUDIO-PS-Plugin (Socket.IO MCP 桥)
+        psai_err = ""
+        try:
+            from adb_mcp_client import AdbMCPPhotoshopClient
+
+            adb = AdbMCPPhotoshopClient(dry_run=False)
+            if adb.is_available():
+                res = adb.send_command(
+                    "psaiGenerateAndPlace",
+                    {
+                        "prompt": clean_prompt,
+                        "sourceImageDataUrl": src_data_url,
+                        "bbox": list(bbox) if bbox else None,
+                        "layerName": layer_name,
+                        "colorMatch": True,
+                    },
+                    timeout=120.0,
+                )
+                if res.get("status") == "ok":
+                    applied_mask = self._apply_patch_mask(mask_mode=mask_mode, bbox=bbox, feather_px=feather_px)
+                    self.ps_set_layer_blend_opacity(blend_mode=blend_mode, opacity=op, layer_name=layer_name)
+                    return self._record(
+                        "ps_ai_generate_masked_patch",
+                        {"prompt": clean_prompt, "mask_mode": applied_mask, "opacity": op, "layer_name": layer_name},
+                        {"status": "ok", "backend": "psai-uxp-plugin", "mask": applied_mask, "plugin_res": res},
+                    )
+        except Exception as exc:  # noqa: BLE001
+            psai_err = str(exc)
+
+        # 通道 B：回退到 .env 配置的 OpenAI / GRS 图像编辑接口（IMAGE_GEN_API_URL 或 GRS_BASE_URL）
+        import httpx
+
+        api_base = (os.getenv("IMAGE_GEN_API_URL") or os.getenv("GRS_BASE_URL") or "").strip().rstrip("/")
+        api_key = (os.getenv("IMAGE_GEN_API_KEY") or os.getenv("GRS_API_KEY") or "").strip()
+        model = (os.getenv("IMAGE_EDIT_MODEL") or "nano-banana-2.1").strip()
+        if not api_base or not api_key:
+            raise RuntimeError(
+                f"PSAI 插件未连接({psai_err or '未开启'})且未配置 IMAGE_GEN_API_URL/IMAGE_GEN_API_KEY，无法生成局部贴片"
+            )
+
+        endpoint = api_base if api_base.endswith("/edits") or api_base.endswith("/generations") else f"{api_base}/images/edits"
+        with httpx.Client(timeout=120.0) as client:
+            with open(src_jpg, "rb") as fh:
+                resp = client.post(
+                    endpoint,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    data={"model": model, "prompt": clean_prompt, "response_format": "b64_json"},
+                    files={"image": ("canvas.jpg", fh, "image/jpeg")},
+                )
+            if resp.status_code >= 400:
+                raise RuntimeError(f"图像编辑 API 失败 (HTTP {resp.status_code}): {resp.text[:300]}")
+            payload = resp.json()
+            item = (payload.get("data") or [{}])[0]
+            out_img = tmp_dir / f"patch_{os.getpid()}.png"
+            if item.get("b64_json"):
+                out_img.write_bytes(base64.b64decode(item["b64_json"]))
+            elif item.get("url"):
+                r_img = client.get(item["url"])
+                r_img.raise_for_status()
+                out_img.write_bytes(r_img.content)
+            else:
+                raise RuntimeError(f"图像编辑 API 未返回图片数据: {str(payload)[:200]}")
+
+        return self.ps_place_image_with_mask(
+            image_path=str(out_img),
+            mask_mode=mask_mode,
+            bbox=bbox,
+            opacity=op,
+            blend_mode=blend_mode,
+            feather_px=feather_px,
+            layer_name=layer_name,
+        )
+
     # ==================== OpenAI Tool Calling Schema & Dispatch ====================
 
+    @staticmethod
+    def _normalize_tool_args(tool_name: str, raw_args: Dict[str, Any], fn: Callable[..., Any]) -> Dict[str, Any]:
+        """兼容大模型 Tool Calling / 终审 fix_calls 常见的参数别名，并过滤签名外字段防止 TypeError。"""
+        import inspect
+
+        args = dict(raw_args)
+        # 通用别名: name -> layer_name
+        if "name" in args and "layer_name" not in args:
+            args["layer_name"] = args.pop("name")
+
+        if tool_name == "ps_add_exposure_layer":
+            if "exposure" in args and "exposure_delta" not in args:
+                args["exposure_delta"] = args.pop("exposure")
+            if "exposure_delta" not in args:
+                args["exposure_delta"] = 0.0
+
+        elif tool_name == "ps_add_color_balance_layer":
+            if "temp" in args and "temp_delta" not in args:
+                args["temp_delta"] = args.pop("temp")
+            if "tint" in args and "tint_delta" not in args:
+                args["tint_delta"] = args.pop("tint")
+
+        elif tool_name == "ps_add_curves_layer":
+            if "points" in args and "curves_points" not in args:
+                args["curves_points"] = args.pop("points")
+            if "curves_points" not in args:
+                args["curves_points"] = [[0, 0], [128, 128], [255, 255]]
+
+        elif tool_name == "ps_add_hsl_layer":
+            if "channels" in args and "hsl_adjustments" not in args:
+                args["hsl_adjustments"] = args.pop("channels")
+            if "hsl_adjustments" not in args or not isinstance(args.get("hsl_adjustments"), dict):
+                # 兼容 AI 传 target="skin"/"oranges"/"master" + saturation_delta/lightness_delta/hue_delta
+                target = str(args.pop("target", "") or args.pop("channel", "") or "oranges").strip().lower()
+                ch_map = {
+                    "skin": "oranges", "orange": "oranges", "oranges": "oranges",
+                    "red": "reds", "reds": "reds",
+                    "yellow": "yellows", "yellows": "yellows",
+                    "green": "greens", "greens": "greens",
+                    "cyan": "cyans", "cyans": "cyans", "aqua": "cyans", "aquas": "cyans",
+                    "blue": "blues", "blues": "blues",
+                    "purple": "magentas", "magenta": "magentas", "magentas": "magentas",
+                }
+                ch_key = ch_map.get(target, "oranges")
+                h_val = float(args.pop("hue_delta", args.pop("hue", 0.0)) or 0.0)
+                s_val = float(args.pop("saturation_delta", args.pop("saturation", 0.0)) or 0.0)
+                l_val = float(args.pop("lightness_delta", args.pop("luminance_delta", args.pop("lightness", args.pop("luminance", 0.0)))) or 0.0)
+                if target in ("all", "master", "background", "bg"):
+                    args["hsl_adjustments"] = {
+                        c: {"hue": h_val, "saturation": s_val, "lightness": l_val}
+                        for c in ("reds", "yellows", "greens", "cyans", "blues")
+                    }
+                else:
+                    args["hsl_adjustments"] = {ch_key: {"hue": h_val, "saturation": s_val, "lightness": l_val}}
+
+        elif tool_name == "ps_add_vibrance_layer":
+            if "vibrance_delta" in args and "vibrance" not in args:
+                args["vibrance"] = int(round(float(args.pop("vibrance_delta"))))
+            if "saturation_delta" in args and "saturation" not in args:
+                args["saturation"] = int(round(float(args.pop("saturation_delta"))))
+
+        elif tool_name == "ps_modify_selection":
+            action = str(args.pop("action", "") or "").strip().lower()
+            if action == "invert":
+                args["invert"] = True
+            if "radius" in args and "feather_px" not in args:
+                args["feather_px"] = args.pop("radius")
+            if "feather" in args and "feather_px" not in args:
+                args["feather_px"] = args.pop("feather")
+            if "expand" in args and "expand_px" not in args:
+                args["expand_px"] = args.pop("expand")
+            if "contract" in args and "contract_px" not in args:
+                args["contract_px"] = args.pop("contract")
+
+        elif tool_name == "ps_set_layer_blend_opacity":
+            if "blend" in args and "blend_mode" not in args:
+                args["blend_mode"] = args.pop("blend")
+
+        # 终极防爆：按目标方法签名过滤未知参数
+        sig = inspect.signature(fn)
+        has_varkw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        if not has_varkw:
+            valid_keys = set(sig.parameters.keys())
+            args = {k: v for k, v in args.items() if k in valid_keys}
+        return args
+
     def dispatch_tool(self, tool_name: str, arguments: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """供本地 8B 模型 Tool Calling 或编排器统一分发执行。"""
-        args = arguments if isinstance(arguments, dict) else {}
+        """供本地 8B 模型 Tool Calling 或编排器统一分发执行。支持 AI 便捷传入 mask='subject'|'background'|'skin'。"""
+        args = dict(arguments) if isinstance(arguments, dict) else {}
+        auto_mask = str(args.pop("mask", "") or "").strip().lower()
         handlers: Dict[str, Callable[..., Dict[str, Any]]] = {
             "ps_status": self.ps_status,
             "ps_open_document": self.ps_open_document,
@@ -718,11 +1029,37 @@ class PSMCPToolkit:
             "ps_execute_extendscript": self.ps_execute_extendscript,
             "ps_execute_batchplay": self.ps_execute_batchplay,
             "ps_get_canvas_preview": self.ps_get_canvas_preview,
+            "ps_place_image_with_mask": self.ps_place_image_with_mask,
+            "ps_ai_generate_masked_patch": self.ps_ai_generate_masked_patch,
         }
         fn = handlers.get(tool_name)
         if fn is None:
             raise ValueError(f"未知 Photoshop MCP 工具: {tool_name}")
-        return fn(**args)
+
+        # 若 AI 附带 mask="subject" / "background" / "skin"，自动前置建立羽化选区并在图层创建后取消选区
+        mask_applied = False
+        if auto_mask in ("subject", "person", "foreground"):
+            self.ps_select_subject()
+            self.ps_modify_selection(feather_px=4.0, invert=False)
+            mask_applied = True
+        elif auto_mask in ("background", "bg"):
+            self.ps_select_subject()
+            self.ps_modify_selection(feather_px=8.0, invert=True)
+            mask_applied = True
+        elif auto_mask in ("skin", "skintones", "skin_tones"):
+            self.ps_select_color_range(preset="skinTones", fuzziness=38)
+            self.ps_modify_selection(feather_px=5.0, invert=False)
+            mask_applied = True
+
+        try:
+            clean_args = self._normalize_tool_args(tool_name, args, fn)
+            return fn(**clean_args)
+        finally:
+            if mask_applied:
+                try:
+                    self.ps_deselect()
+                except Exception:
+                    pass
 
     @staticmethod
     def get_openai_tool_schemas() -> List[Dict[str, Any]]:
