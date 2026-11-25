@@ -1,0 +1,6 @@
+# GitHub 仓库赞赏（Sponsor）配置文件
+# 启用步骤：在 GitHub 仓库页面点击 Settings -> General -> Features -> 勾选 "Sponsorships"
+# 如有爱发电 / 个人收款页，可取消下方 custom 注释并填入对应链接。
+
+github: [shengmojiaogexing]
+# custom: ["https://afdian.com/a/你的主页"]
