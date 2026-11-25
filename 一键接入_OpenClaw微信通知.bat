@@ -3,7 +3,7 @@ setlocal
 echo ====================================================================
 echo ZERO STUDIO - One-Click OpenClaw WeChat Official QR Login Setup
 echo ====================================================================
-echo [Step 1/5] Checking Node.js (requires Node.js >= 22)...
+echo [Step 1/5] Checking Node.js (requires Node.js 22+)...
 node -v
 if %errorlevel% neq 0 (
     echo [ERROR] Node.js not found. Please install Node.js 22+ first.
