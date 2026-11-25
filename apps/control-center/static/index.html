@@ -122,6 +122,10 @@
                     <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
                     <span>后期、仿色与交付</span>
                 </button>
+                <button onclick="switchTab('nas')" id="nav-nas" class="nav-link w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+                    <span>云盘 NAS 与分享</span>
+                </button>
                 <button onclick="switchTab('settings')" id="nav-settings" class="nav-link w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition">
                     <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                     <span>系统设置</span>
@@ -805,6 +809,160 @@
             </section>
 
             <!-- ==================== 5. 系统设置 ==================== -->
+            <!-- ==================== 6.5 云盘 NAS 与分享（原生集成，无 iframe） ==================== -->
+            <section id="tab-nas" class="hidden space-y-5">
+                <div class="glass-card rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button id="nasSubFiles" onclick="switchNasSub('files')" class="px-4 py-2 rounded-full text-xs font-bold bg-[#6fa8a5] text-[#161a21] transition"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg> 在线云盘与分享</button>
+                        <button id="nasSubDevice" onclick="switchNasSub('device')" class="px-4 py-2 rounded-full text-xs font-bold bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 transition"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.03 7.03 0 00-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87a.48.48 0 00.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 00-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.61 3.61 0 0112 15.6z"/></svg> TR3000 硬盘与 Wi-Fi</button>
+                        <button onclick="openNasMyShares()" class="px-4 py-2 rounded-full text-xs font-bold bg-[#e2bac8]/15 text-[#e2bac8] border border-[#e2bac8]/30 hover:bg-[#e2bac8] hover:text-[#161a21] transition"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M10.59 13.41a1.996 1.996 0 002.83 0l4.24-4.24a4 4 0 00-5.66-5.66l-1.71 1.71 1.41 1.41 1.71-1.71a2 2 0 112.83 2.83l-4.24 4.24a2 2 0 01-2.83 0L7.76 10.59 6.34 12l1.42 1.41a4 4 0 002.83 0zM13.41 10.59a1.996 1.996 0 00-2.83 0l-4.24 4.24a4 4 0 105.66 5.66l1.71-1.71-1.41-1.41-1.71 1.71a2 2 0 11-2.83-2.83l4.24-4.24a2 2 0 012.83 0l1.41 1.41 1.41-1.41-1.41-1.42z"/></svg> 我的分享链接</button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span id="nasV6Tag" class="hidden px-3 py-1 rounded-full text-[11px] font-bold bg-[#c4c698]/15 text-[#c4c698] border border-[#c4c698]/30"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg> IPv6 就绪</span>
+                        <a href="https://zero-ai.cloud" target="_blank" class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 transition"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M19 19H5V5h7V3H5a2 2 0 00-2 2v14a2 2 0 002 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg> 独立网盘页</a>
+                    </div>
+                </div>
+
+                <!-- 子视图 1：原生云盘文件浏览器 -->
+                <div id="nasViewFiles" class="space-y-4">
+                    <div class="glass-card rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+                        <div id="nasCrumb" class="flex items-center gap-1.5 text-xs text-gray-300 overflow-x-auto whitespace-nowrap flex-1"></div>
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <input id="nasSearch" type="search" placeholder="搜索当前目录..." oninput="renderNasFiles()" class="px-3.5 py-1.5 rounded-xl bg-black/30 border border-white/10 text-xs text-white focus:border-[#6fa8a5] outline-none flex-1 sm:w-52">
+                            <button onclick="loadNasDir(nasCurPath)" class="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-gray-200 border border-white/10">刷新</button>
+                        </div>
+                    </div>
+                    <div class="glass-card rounded-2xl overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-white/10 text-gray-400 bg-black/20">
+                                        <th class="py-3 px-4 font-semibold">文件 / 文件夹</th>
+                                        <th class="py-3 px-4 font-semibold w-28">大小</th>
+                                        <th class="py-3 px-4 font-semibold w-40">修改时间</th>
+                                        <th class="py-3 px-4 font-semibold text-right w-64">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="nasFileBody" class="divide-y divide-white/5">
+                                    <tr><td colspan="4" class="py-8 text-center text-gray-400">正在加载云盘目录...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 子视图 2：原生 TR3000 硬盘重命名、改密与 Wi-Fi 控制 -->
+                <div id="nasViewDevice" class="hidden space-y-5">
+                    <div class="glass-card rounded-2xl p-5 space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <h3 class="text-sm font-bold text-white">硬盘共享名称管理（SMB / FTP / 云盘三端实时同步）</h3>
+                                <p class="text-[11px] text-gray-400 mt-0.5">按硬盘 UUID 永久绑定别名，修改后 3 秒生效</p>
+                            </div>
+                            <button onclick="nasRemountDisks()" class="px-4 py-2 rounded-full text-xs font-bold bg-[#c4c698]/20 text-[#c4c698] border border-[#c4c698]/35 hover:bg-[#c4c698] hover:text-[#161a21] transition"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg> 强制重新扫描挂载</button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-white/10 text-gray-400">
+                                        <th class="py-2.5 px-3">设备分区</th>
+                                        <th class="py-2.5 px-3">容量 / 已用</th>
+                                        <th class="py-2.5 px-3">格式</th>
+                                        <th class="py-2.5 px-3">共享显示名称</th>
+                                        <th class="py-2.5 px-3">状态</th>
+                                        <th class="py-2.5 px-3 text-right">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="nasDiskBody" class="divide-y divide-white/5">
+                                    <tr><td colspan="6" class="py-6 text-center text-gray-400">正在读取 TR3000 硬盘...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="glass-card rounded-2xl p-5 space-y-3">
+                            <h4 class="text-xs font-bold text-[#6fa8a5] uppercase tracking-wider">TR3000 自身 Wi-Fi 热点</h4>
+                            <input id="nasAp24" type="text" placeholder="2.4G 名称" class="w-full px-3 py-2 rounded-xl bg-black/30 border border-white/10 text-xs text-white">
+                            <input id="nasAp5" type="text" placeholder="5G 名称" class="w-full px-3 py-2 rounded-xl bg-black/30 border border-white/10 text-xs text-white">
+                            <input id="nasApKey" type="text" placeholder="热点密码（至少8位）" class="w-full px-3 py-2 rounded-xl bg-black/30 border border-white/10 text-xs text-white">
+                            <button onclick="nasSaveApWifi()" class="w-full py-2 rounded-full text-xs font-bold bg-[#6fa8a5] text-[#161a21] hover:bg-[#85c4c1] transition">保存热点配置</button>
+                        </div>
+                        <div class="glass-card rounded-2xl p-5 space-y-3">
+                            <h4 class="text-xs font-bold text-[#e2bac8] uppercase tracking-wider">上级中继 Wi-Fi 联网</h4>
+                            <input id="nasStaSsid" type="text" placeholder="上级 Wi-Fi 名称" class="w-full px-3 py-2 rounded-xl bg-black/30 border border-white/10 text-xs text-white">
+                            <input id="nasStaKey" type="text" placeholder="上级 Wi-Fi 密码" class="w-full px-3 py-2 rounded-xl bg-black/30 border border-white/10 text-xs text-white">
+                            <p class="text-[11px] text-gray-400">保存后路由器约 5~10 秒重连上级网络</p>
+                            <button onclick="nasSaveStaWifi()" class="w-full py-2 rounded-full text-xs font-bold bg-[#e2bac8]/20 text-[#e2bac8] border border-[#e2bac8]/35 hover:bg-[#e2bac8] hover:text-[#161a21] transition">保存并重连</button>
+                        </div>
+                        <div class="glass-card rounded-2xl p-5 space-y-3">
+                            <h4 class="text-xs font-bold text-[#c4c698] uppercase tracking-wider">SMB / FTP / 网盘共享密码</h4>
+                            <p class="text-[11px] text-gray-400">统一修改 <b class="text-white">admin</b> 的 SMB、FTP 与独立网盘访问密码</p>
+                            <input id="nasSmbPass" type="password" placeholder="输入新密码（至少4位）" class="w-full px-3 py-2 rounded-xl bg-black/30 border border-white/10 text-xs text-white">
+                            <button onclick="nasChangeSmbPass()" class="w-full py-2 rounded-full text-xs font-bold bg-[#c4c698] text-[#161a21] hover:opacity-90 transition">更新共享密码</button>
+                        </div>
+                    </div>
+
+                    <div class="glass-card rounded-2xl p-5">
+                        <h4 class="text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">EasyTier P2P 隧道实时状态</h4>
+                        <pre id="nasEtPre" class="text-[11px] text-gray-300 bg-black/30 p-3 rounded-xl overflow-x-auto font-mono">加载中...</pre>
+                    </div>
+                </div>
+
+                <!-- 原生预览弹窗 -->
+                <div id="nasPreviewModal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4" onclick="if(event.target===this)closeNasPreview()">
+                    <div class="glass-card rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-white/15">
+                        <div class="flex items-center justify-between px-4 py-3 border-b border-white/10 gap-3">
+                            <div id="nasPreviewTitle" class="text-sm font-bold text-white truncate">预览</div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <a id="nasPreviewDown" href="#" download class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#6fa8a5] text-[#161a21]">下载原件</a>
+                                <button onclick="closeNasPreview()" class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white/10 text-gray-200">关闭</button>
+                            </div>
+                        </div>
+                        <div id="nasPreviewBody" class="p-4 overflow-auto flex items-center justify-center bg-black/40 min-h-[260px] max-h-[76vh]"></div>
+                    </div>
+                </div>
+
+                <!-- 原生创建分享弹窗 -->
+                <div id="nasShareModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="if(event.target===this)closeNasShareModal()">
+                    <div class="glass-card rounded-2xl w-full max-w-md p-5 space-y-4 border border-white/15">
+                        <div class="flex items-center justify-between">
+                            <h3 id="nasShareTitle" class="text-sm font-bold text-white truncate">创建分享链接</h3>
+                            <button onclick="closeNasShareModal()" class="text-gray-400 hover:text-white text-xs">关闭</button>
+                        </div>
+                        <div id="nasSharePathText" class="text-xs text-[#6fa8a5] break-all"></div>
+                        <div class="space-y-2 text-xs">
+                            <label class="text-gray-400 block">有效期</label>
+                            <select id="nasShareDays" class="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white">
+                                <option value="1">1 天</option>
+                                <option value="7" selected>7 天</option>
+                                <option value="30">30 天</option>
+                                <option value="0">永久有效</option>
+                            </select>
+                            <label class="text-gray-400 block mt-2">提取码（留空则免密直开）</label>
+                            <input id="nasShareCode" type="text" placeholder="例如 6688（选填）" maxlength="16" class="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white">
+                        </div>
+                        <button onclick="submitNasShare()" class="w-full py-2.5 rounded-full text-xs font-bold bg-[#e2bac8] text-[#161a21]">生成 https://zero-ai.cloud 分享链接</button>
+                        <div id="nasShareResult" class="hidden rounded-xl bg-[#6fa8a5]/10 border border-[#6fa8a5]/30 p-3 space-y-2 text-xs">
+                            <div id="nasShareUrlOut" class="font-mono text-[#6fa8a5] break-all"></div>
+                            <div id="nasShareCodeOut" class="text-[#c4c698]"></div>
+                            <button onclick="copyNasShareResult()" class="w-full py-2 rounded-full font-bold bg-[#6fa8a5] text-[#161a21]">一键复制发给好友</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 原生我的分享列表弹窗 -->
+                <div id="nasMySharesModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="if(event.target===this)closeNasMyShares()">
+                    <div class="glass-card rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden border border-white/15">
+                        <div class="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                            <h3 class="text-sm font-bold text-white">我的分享链接管理</h3>
+                            <button onclick="closeNasMyShares()" class="px-3 py-1 rounded-full text-xs bg-white/10 text-gray-200">关闭</button>
+                        </div>
+                        <div id="nasMySharesBody" class="p-4 overflow-auto text-xs text-gray-300">加载中...</div>
+                    </div>
+                </div>
+            </section>
+
             <section id="tab-settings" class="hidden space-y-6 text-xs">
                 <div class="flex flex-wrap items-end justify-between gap-3">
                     <div>
@@ -965,7 +1123,7 @@
         async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); location.href = '/login'; }
 
         function switchTab(name) {
-            ['overview','im','messages','services','site','studio','settings'].forEach(t => {
+            ['overview','im','messages','services','site','studio','nas','settings'].forEach(t => {
                 document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== name);
                 document.getElementById(`nav-${t}`).classList.toggle('active', t === name);
             });
@@ -976,7 +1134,188 @@
             if (name === 'services') loadServicesTab();
             if (name === 'site') loadSiteTab();
             if (name === 'studio') loadStudioTab();
+            if (name === 'nas') ensureNasLoaded();
             if (name === 'settings') loadSettingsTab();
+        }
+
+        let nasCurPath = '', nasCurItems = [], nasPendingShare = { path: '', name: '' }, nasLastShareCopy = '';
+        function ensureNasLoaded() { loadNasDir(nasCurPath); }
+        function switchNasSub(mode) {
+            const isF = mode === 'files';
+            document.getElementById('nasViewFiles').classList.toggle('hidden', !isF);
+            document.getElementById('nasViewDevice').classList.toggle('hidden', isF);
+            document.getElementById('nasSubFiles').className = isF
+                ? 'px-4 py-2 rounded-full text-xs font-bold bg-[#6fa8a5] text-[#161a21] transition'
+                : 'px-4 py-2 rounded-full text-xs font-bold bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 transition';
+            document.getElementById('nasSubDevice').className = !isF
+                ? 'px-4 py-2 rounded-full text-xs font-bold bg-[#6fa8a5] text-[#161a21] transition'
+                : 'px-4 py-2 rounded-full text-xs font-bold bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 transition';
+            if (isF) loadNasDir(nasCurPath); else loadNasDeviceStatus();
+        }
+        function nasEsc(s) { return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+        function nasExt(n) { const i = n.lastIndexOf('.'); return i >= 0 ? n.slice(i+1).toLowerCase() : ''; }
+        function nasPreviewType(n) {
+            const e = nasExt(n);
+            if (['jpg','jpeg','png','gif','webp','bmp','svg'].includes(e)) return 'image';
+            if (['mp4','webm','mov','m4v'].includes(e)) return 'video';
+            if (['mp3','wav','ogg','m4a','flac'].includes(e)) return 'audio';
+            if (e === 'pdf') return 'pdf';
+            if (['txt','md','json','log','csv','py','js','css','html','xml','ini','conf','sh','bat'].includes(e)) return 'text';
+            return 'none';
+        }
+        async function loadNasDir(path) {
+            nasCurPath = path || '';
+            const kwEl = document.getElementById('nasSearch'); if (kwEl) kwEl.value = '';
+            const parts = nasCurPath ? nasCurPath.split('/') : [];
+            let ch = `<button onclick="loadNasDir('')" class="text-[#6fa8a5] font-semibold hover:underline"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg> 全部硬盘</button>`, acc = '';
+            for (const p of parts) { acc = acc ? `${acc}/${p}` : p; const t = acc; ch += `<span class="text-gray-500">/</span><button onclick="loadNasDir('${nasEsc(t)}')" class="text-[#6fa8a5] font-semibold hover:underline">${nasEsc(p)}</button>`; }
+            document.getElementById('nasCrumb').innerHTML = ch;
+            document.getElementById('nasFileBody').innerHTML = '<tr><td colspan="4" class="py-8 text-center text-gray-400">正在读取目录...</td></tr>';
+            try {
+                const d = await api('/api/nas/list?path=' + encodeURIComponent(nasCurPath));
+                nasCurItems = d.items || [];
+                renderNasFiles();
+            } catch (e) {
+                document.getElementById('nasFileBody').innerHTML = `<tr><td colspan="4" class="py-8 text-center text-red-400">读取失败: ${nasEsc(e.message || e)}</td></tr>`;
+            }
+        }
+        function renderNasFiles() {
+            const kw = (document.getElementById('nasSearch')?.value || '').trim().toLowerCase();
+            let rows = '';
+            if (nasCurPath) {
+                const parent = nasCurPath.includes('/') ? nasCurPath.slice(0, nasCurPath.lastIndexOf('/')) : '';
+                rows += `<tr class="hover:bg-white/[0.03]"><td colspan="4" class="py-3 px-4"><button onclick="loadNasDir('${nasEsc(parent)}')" class="text-gray-300 hover:text-[#6fa8a5] font-medium"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M19 7v4H5.83l3.58-3.59L8 6l-6 6 6 6 1.41-1.41L5.83 13H21V7z"/></svg> 返回上一级目录</button></td></tr>`;
+            }
+            const list = nasCurItems.filter(x => !kw || x.name.toLowerCase().includes(kw));
+            if (!list.length) {
+                rows += `<tr><td colspan="4" class="py-8 text-center text-gray-500">当前目录为空或无匹配文件</td></tr>`;
+            } else {
+                for (const it of list) {
+                    const p = nasCurPath ? `${nasCurPath}/${it.name}` : it.name;
+                    const enc = encodeURIComponent(p);
+                    const sBtn = `<button onclick="openNasShareModal('${nasEsc(p)}','${nasEsc(it.name)}')" class="px-2.5 py-1 rounded-full bg-[#e2bac8]/15 text-[#e2bac8] hover:bg-[#e2bac8] hover:text-[#161a21] font-semibold transition">分享</button>`;
+                    if (it.is_dir) {
+                        rows += `<tr class="hover:bg-white/[0.03]">
+                            <td class="py-3 px-4"><button onclick="loadNasDir('${nasEsc(p)}')" class="text-left text-gray-100 hover:text-[#6fa8a5] font-medium break-all"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px;flex-shrink:0;color:#6fa8a5"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg> ${nasEsc(it.name)}</button></td>
+                            <td class="py-3 px-4 text-gray-400">文件夹</td>
+                            <td class="py-3 px-4 text-gray-400">${nasEsc(it.mtime)}</td>
+                            <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">${sBtn}<a href="/api/nas/download-zip?path=${enc}" class="inline-block px-2.5 py-1 rounded-full bg-[#c4c698]/15 text-[#c4c698] hover:bg-[#c4c698] hover:text-[#161a21] font-semibold transition">打包下载</a><button onclick="loadNasDir('${nasEsc(p)}')" class="px-2.5 py-1 rounded-full bg-[#6fa8a5] text-[#161a21] font-bold">打开</button></td>
+                        </tr>`;
+                    } else {
+                        const pt = nasPreviewType(it.name);
+                        const pBtn = pt !== 'none' ? `<button onclick="openNasPreview('${nasEsc(p)}','${nasEsc(it.name)}','${pt}')" class="px-2.5 py-1 rounded-full bg-white/10 text-gray-200 hover:bg-white/20 font-semibold transition">预览</button>` : '';
+                        rows += `<tr class="hover:bg-white/[0.03]">
+                            <td class="py-3 px-4"><button onclick="${pt!=='none'?`openNasPreview('${nasEsc(p)}','${nasEsc(it.name)}','${pt}')`:`window.open('/api/nas/download?path=${enc}','_blank')`}" class="text-left text-gray-100 hover:text-[#6fa8a5] font-medium break-all"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z"/></svg> ${nasEsc(it.name)}</button></td>
+                            <td class="py-3 px-4 text-gray-400">${nasEsc(it.size_str)}</td>
+                            <td class="py-3 px-4 text-gray-400">${nasEsc(it.mtime)}</td>
+                            <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">${sBtn}${pBtn}<a href="/api/nas/download?path=${enc}" download class="inline-block px-2.5 py-1 rounded-full bg-[#6fa8a5] text-[#161a21] font-bold">下载</a></td>
+                        </tr>`;
+                    }
+                }
+            }
+            document.getElementById('nasFileBody').innerHTML = rows;
+        }
+        async function openNasPreview(path, name, type) {
+            const enc = encodeURIComponent(path);
+            const rawUrl = '/api/nas/raw?path=' + enc, dlUrl = '/api/nas/download?path=' + enc;
+            document.getElementById('nasPreviewTitle').textContent = name;
+            document.getElementById('nasPreviewDown').href = dlUrl;
+            const body = document.getElementById('nasPreviewBody');
+            body.innerHTML = '<div class="text-gray-400 text-xs">加载中...</div>';
+            document.getElementById('nasPreviewModal').classList.remove('hidden');
+            if (type === 'image') body.innerHTML = `<img src="${rawUrl}" class="max-w-full max-h-[70vh] rounded-xl">`;
+            else if (type === 'video') body.innerHTML = `<video src="${rawUrl}" controls autoplay playsinline webkit-playsinline class="max-w-full max-h-[70vh] rounded-xl"></video>`;
+            else if (type === 'audio') body.innerHTML = `<audio src="${rawUrl}" controls autoplay class="w-full"></audio>`;
+            else if (type === 'pdf') body.innerHTML = `<iframe src="${rawUrl}" class="w-full h-[70vh] rounded-xl bg-white border-0"></iframe>`;
+            else if (type === 'text') {
+                const r = await fetch('/api/nas/text?path=' + enc);
+                body.innerHTML = `<pre class="w-full text-xs text-gray-200 whitespace-pre-wrap break-all font-mono">${nasEsc(await r.text())}</pre>`;
+            }
+        }
+        function closeNasPreview() { document.getElementById('nasPreviewModal').classList.add('hidden'); document.getElementById('nasPreviewBody').innerHTML = ''; }
+        function openNasShareModal(path, name) {
+            nasPendingShare = { path, name };
+            document.getElementById('nasShareTitle').textContent = '分享 · ' + name;
+            document.getElementById('nasSharePathText').textContent = '/' + path;
+            document.getElementById('nasShareCode').value = '';
+            document.getElementById('nasShareResult').classList.add('hidden');
+            document.getElementById('nasShareModal').classList.remove('hidden');
+        }
+        function closeNasShareModal() { document.getElementById('nasShareModal').classList.add('hidden'); }
+        async function submitNasShare() {
+            const days = parseInt(document.getElementById('nasShareDays').value, 10);
+            const code = document.getElementById('nasShareCode').value.trim();
+            const d = await api('/api/nas/share/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ path: nasPendingShare.path, days, code }) });
+            document.getElementById('nasShareUrlOut').textContent = d.url;
+            document.getElementById('nasShareCodeOut').textContent = code ? ('提取码：' + code) : '免提取码 · 点开直接查看下载';
+            nasLastShareCopy = code ? `ZERO STUDIO 分享了「${nasPendingShare.name}」给你：\n链接：${d.url}\n提取码：${code}` : `ZERO STUDIO 分享了「${nasPendingShare.name}」给你：\n链接：${d.url}`;
+            document.getElementById('nasShareResult').classList.remove('hidden');
+            toast('分享链接已生成');
+        }
+        function copyNasShareResult() { copyText(nasLastShareCopy); }
+        async function openNasMyShares() {
+            document.getElementById('nasMySharesModal').classList.remove('hidden');
+            const body = document.getElementById('nasMySharesBody');
+            body.innerHTML = '加载中...';
+            const d = await api('/api/nas/share/list');
+            const list = d.shares || [];
+            if (!list.length) { body.innerHTML = '<div class="py-8 text-center text-gray-500">暂无分享链接</div>'; return; }
+            body.innerHTML = `<table class="w-full text-left border-collapse"><thead><tr class="border-b border-white/10 text-gray-400"><th class="py-2">分享内容</th><th class="py-2">提取码</th><th class="py-2">到期时间</th><th class="py-2 text-right">操作</th></tr></thead><tbody class="divide-y divide-white/5">` +
+                list.map(s => {
+                    const cp = s.code ? `链接：${s.url}  提取码：${s.code}` : s.url;
+                    return `<tr><td class="py-2.5"><div class="font-semibold text-white">${nasEsc(s.name)}</div><div class="text-[11px] text-[#6fa8a5]">${nasEsc(s.url)}</div></td><td class="py-2.5 text-[#c4c698]">${s.code ? nasEsc(s.code) : '免密'}</td><td class="py-2.5 text-gray-400">${nasEsc(s.expire_str)}</td><td class="py-2.5 text-right space-x-1.5 whitespace-nowrap"><button onclick="copyText('${nasEsc(cp)}')" class="px-2.5 py-1 rounded-full bg-[#6fa8a5] text-[#161a21] font-bold">复制</button><a href="${nasEsc(s.url)}" target="_blank" class="inline-block px-2.5 py-1 rounded-full bg-white/10 text-gray-200">打开</a><button onclick="deleteNasShare('${nasEsc(s.token)}')" class="px-2.5 py-1 rounded-full bg-red-500/20 text-red-300">取消</button></td></tr>`;
+                }).join('') + `</tbody></table>`;
+        }
+        function closeNasMyShares() { document.getElementById('nasMySharesModal').classList.add('hidden'); }
+        async function deleteNasShare(token) { await api('/api/nas/share/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ token }) }); toast('已取消分享'); openNasMyShares(); }
+
+        async function loadNasDeviceStatus() {
+            const d = await api('/api/nas/device/status');
+            document.getElementById('nasEtPre').textContent = d.easytier || '暂无隧道信息';
+            if (d.wifi) {
+                document.getElementById('nasAp24').value = d.wifi.ap24_ssid || '';
+                document.getElementById('nasAp5').value = d.wifi.ap5_ssid || '';
+                document.getElementById('nasApKey').value = d.wifi.ap_key || '';
+                document.getElementById('nasStaSsid').value = d.wifi.sta_ssid || '';
+                document.getElementById('nasStaKey').value = d.wifi.sta_key || '';
+                if (d.wifi.ipv6) {
+                    const tag = document.getElementById('nasV6Tag');
+                    tag.textContent = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg> IPv6: ' + d.wifi.ipv6.slice(0, 18) + '...';
+                    tag.classList.remove('hidden');
+                }
+            }
+            const tb = document.getElementById('nasDiskBody');
+            const disks = d.disks || [];
+            if (!disks.length) { tb.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-gray-500">未检测到硬盘</td></tr>'; return; }
+            tb.innerHTML = disks.map(x => `<tr>
+                <td class="py-2.5 px-3"><b class="text-white">${nasEsc(x.part)}</b><div class="text-[10px] text-gray-500">${nasEsc(x.uuid)}</div></td>
+                <td class="py-2.5 px-3">${nasEsc(x.size)} <span class="text-gray-400">(${nasEsc(x.used)} / ${nasEsc(x.usepct)})</span></td>
+                <td class="py-2.5 px-3 uppercase">${nasEsc(x.fstype)}</td>
+                <td class="py-2.5 px-3"><input id="nd_${nasEsc(x.uuid)}" value="${nasEsc(x.alias)}" class="px-2.5 py-1 rounded-lg bg-black/40 border border-white/10 text-white w-36"></td>
+                <td class="py-2.5 px-3"><label class="inline-flex items-center gap-1.5"><input type="checkbox" id="ne_${nasEsc(x.uuid)}" ${x.enabled==='1'?'checked':''}> 开启</label></td>
+                <td class="py-2.5 px-3 text-right"><button onclick="nasRenameDisk('${nasEsc(x.uuid)}')" class="px-3 py-1 rounded-full bg-[#6fa8a5] text-[#161a21] font-bold">保存</button></td>
+            </tr>`).join('');
+        }
+        async function nasRenameDisk(uuid) {
+            const name = document.getElementById('nd_' + uuid).value.trim();
+            const enabled = document.getElementById('ne_' + uuid).checked ? '1' : '0';
+            await api('/api/nas/device/rename', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ uuid, name, enabled }) });
+            toast('共享名称已更新并三端同步'); loadNasDeviceStatus();
+        }
+        async function nasRemountDisks() { toast('正在重新扫描挂载硬盘...'); await api('/api/nas/device/remount', { method: 'POST' }); toast('扫描挂载完成'); loadNasDeviceStatus(); }
+        async function nasChangeSmbPass() {
+            const password = document.getElementById('nasSmbPass').value.trim();
+            if (password.length < 4) { toast('密码至少 4 位'); return; }
+            await api('/api/nas/device/smbpass', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password }) });
+            document.getElementById('nasSmbPass').value = ''; toast('SMB / FTP / 云盘共享密码已更新');
+        }
+        async function nasSaveApWifi() {
+            await api('/api/nas/device/wifi_ap', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ ap24_ssid: document.getElementById('nasAp24').value, ap5_ssid: document.getElementById('nasAp5').value, ap_key: document.getElementById('nasApKey').value }) });
+            toast('TR3000 热点已更新，约 5 秒生效');
+        }
+        async function nasSaveStaWifi() {
+            await api('/api/nas/device/wifi_sta', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ sta_ssid: document.getElementById('nasStaSsid').value, sta_key: document.getElementById('nasStaKey').value }) });
+            toast('上级中继 Wi-Fi 已更新，正在重连');
         }
 
         function switchStudioSub(sub) {
@@ -1374,7 +1713,7 @@
                 const link = document.getElementById('qqWebuiLink');
                 const hint = document.getElementById('qqWebuiHint');
                 link.href = r.webui_url;
-                link.textContent = `打开 NapCat 控制台 ↗ (${r.mode === 'public' ? '公网' : '内网'} ${r.host}:${r.port})`;
+                link.textContent = `打开 NapCat 控制台 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M19 19H5V5h7V3H5a2 2 0 00-2 2v14a2 2 0 002 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg> (${r.mode === 'public' ? '公网' : '内网'} ${r.host}:${r.port})`;
                 hint.textContent = r.has_token
                     ? '已自动带上 WebUI 登录口令，打开即可扫码；若仍提示密码错误，请复制下方 token 手动填入'
                     : '未能读取 WebUI token，请在 NapCat 控制台手动输入';
@@ -1839,7 +2178,7 @@
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <button onclick="retryBookingRetouch(${b.id})" class="px-3.5 py-1.5 rounded-xl bg-[#6fa8a5] hover:bg-[#7fbab7] text-[#0b0d12] font-bold transition">↻ 重新触发精修</button>
+                                    <button onclick="retryBookingRetouch(${b.id})" class="px-3.5 py-1.5 rounded-xl bg-[#6fa8a5] hover:bg-[#7fbab7] text-[#0b0d12] font-bold transition"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg> 重新触发精修</button>
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">

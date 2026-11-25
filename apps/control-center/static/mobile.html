@@ -154,7 +154,7 @@
                 <div class="hero-label">Operations dashboard</div>
                 <div class="hero-title">今天的工作，<br>从这里开始。</div>
                 <div class="hero-copy">订单、客户对话、AI 回复和后期交付都在同一个手机中控台里。</div>
-                <button class="hero-action" onclick="openNeedsReply()"><span id="heroNeeds">读取待回复消息</span><span>→</span></button>
+                <button id="heroActionBtn" class="hero-action" onclick="heroActionClick()"><span id="heroNeeds">进入云盘 NAS 与分享</span><span>→</span></button>
             </div>
             <div id="homeError" class="notice" hidden></div>
             <div class="grid4">
@@ -164,15 +164,22 @@
                 <div class="metric"><div id="kpiDelivered" class="metric-value green">--</div><div class="metric-label">已交付</div></div>
             </div>
             <div class="card">
-                <div class="card-head"><h2>系统与客服通道</h2><span id="homeSync" class="badge">同步中</span></div>
+                <div class="card-head"><h2>系统状态</h2><span id="homeSync" class="badge">同步中</span></div>
                 <div id="healthGrid" class="status-grid"><div class="loading">正在检测服务状态...</div></div>
-                <div class="divider"></div>
-                <div class="item-top"><div><div class="item-title">PC 微信自动客服</div><div id="wxSummary" class="item-sub">正在读取微信状态...</div></div><span id="wxBadge" class="badge">--</span></div>
-                <div class="btn-row" style="margin-top:12px"><button id="wxToggle" class="btn primary" onclick="toggleWxMonitor()">开启监控</button><button class="btn" onclick="testWxSend()">测试发送</button></div>
+                <div id="homeWxBlock" hidden>
+                    <div class="divider"></div>
+                    <div class="item-top"><div><div class="item-title">PC 微信自动客服</div><div id="wxSummary" class="item-sub">正在读取微信状态...</div></div><span id="wxBadge" class="badge">--</span></div>
+                    <div class="btn-row" style="margin-top:12px"><button id="wxToggle" class="btn primary" onclick="toggleWxMonitor()">开启监控</button><button class="btn" onclick="testWxSend()">测试发送</button></div>
+                </div>
             </div>
-            <div class="card">
+            <div id="homeNeedsCard" class="card" hidden>
                 <div class="card-head"><h2>需要回复</h2><button class="text-btn" onclick="openNeedsReply()">查看全部</button></div>
                 <div id="homeNeedsList" class="list"><div class="loading">正在读取客户消息...</div></div>
+            </div>
+            <div id="homeNasCard" class="card">
+                <div class="card-head"><h2><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg> TR3000 云盘 NAS</h2><button class="text-btn" onclick="switchTab('nas')">进入云盘</button></div>
+                <div class="item-sub" style="margin-bottom:10px">原生免密浏览硬盘文件、在线预览、打包下载与生成分享链接</div>
+                <div class="btn-row"><button class="btn primary" onclick="switchTab('nas')">浏览与分享文件</button><button class="btn" onclick="switchTab('nas');switchMobileNasSub('device')">硬盘与 Wi-Fi</button></div>
             </div>
             <div class="card">
                 <div class="card-head"><h2>最近订单</h2><button class="text-btn" onclick="switchTab('orders')">订单管理</button></div>
@@ -220,9 +227,44 @@
             </div>
         </section>
 
+        <section id="page-nas" class="page" hidden>
+            <div class="page-head"><div><h1>云盘 NAS</h1><div class="sub">原生直连 TR3000 硬盘 · 预览、下载与分享</div></div><button class="text-btn" onclick="refreshMobileNas()">刷新</button></div>
+            <div class="chips" style="margin-bottom:10px">
+                <button id="mNasSubFiles" class="chip active" onclick="switchMobileNasSub('files')"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg> 文件与分享</button>
+                <button id="mNasSubShares" class="chip" onclick="switchMobileNasSub('shares')"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M10.59 13.41a1.996 1.996 0 002.83 0l4.24-4.24a4 4 0 00-5.66-5.66l-1.71 1.71 1.41 1.41 1.71-1.71a2 2 0 112.83 2.83l-4.24 4.24a2 2 0 01-2.83 0L7.76 10.59 6.34 12l1.42 1.41a4 4 0 002.83 0zM13.41 10.59a1.996 1.996 0 00-2.83 0l-4.24 4.24a4 4 0 105.66 5.66l1.71-1.71-1.41-1.41-1.71 1.71a2 2 0 11-2.83-2.83l4.24-4.24a2 2 0 012.83 0l1.41 1.41 1.41-1.41-1.41-1.42z"/></svg> 我的分享</button>
+                <button id="mNasSubDevice" class="chip" onclick="switchMobileNasSub('device')"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.03 7.03 0 00-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87a.48.48 0 00.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 00-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.61 3.61 0 0112 15.6z"/></svg> 硬盘与 Wi-Fi</button>
+            </div>
+            <div id="mNasViewFiles">
+                <div id="mNasCrumb" class="item-sub" style="margin-bottom:8px;overflow-x:auto;white-space:nowrap"></div>
+                <div class="search" style="margin-bottom:10px"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="mNasSearch" class="input" placeholder="搜索当前目录文件..." oninput="renderMobileNasFiles()"></div>
+                <div id="mNasFileList" class="list"><div class="loading">正在读取硬盘目录...</div></div>
+            </div>
+            <div id="mNasViewShares" hidden>
+                <div id="mNasShareList" class="list"><div class="loading">正在读取分享记录...</div></div>
+            </div>
+            <div id="mNasViewDevice" hidden>
+                <div class="card">
+                    <div class="card-head"><h2>硬盘共享名称</h2><button class="text-btn" onclick="mNasRemount()">重新挂载</button></div>
+                    <div id="mNasDiskList" class="list"><div class="loading">正在读取硬盘...</div></div>
+                </div>
+                <div class="card">
+                    <div class="card-head"><h2>修改 SMB / FTP 共享密码</h2></div>
+                    <input id="mNasSmbPass" type="password" class="input" placeholder="输入新密码（至少4位）" style="margin-bottom:10px">
+                    <button class="btn primary block" onclick="mNasSaveSmbPass()">更新共享密码</button>
+                </div>
+                <div class="card">
+                    <div class="card-head"><h2>TR3000 Wi-Fi 热点</h2></div>
+                    <div class="field"><label>2.4G 名称</label><input id="mNasAp24" class="input"></div>
+                    <div class="field"><label>5G 名称</label><input id="mNasAp5" class="input"></div>
+                    <div class="field"><label>热点密码（至少8位）</label><input id="mNasApKey" class="input"></div>
+                    <button class="btn primary block" onclick="mNasSaveApWifi()">保存热点配置</button>
+                </div>
+            </div>
+        </section>
+
         <section id="page-settings" class="page" hidden>
             <div class="page-head"><div><h1>系统设置</h1><div class="sub">真实配置、连通性测试与账户管理</div></div><button class="text-btn" onclick="loadSettings()">刷新</button></div>
-            <div class="card"><div class="item-top"><div><div class="item-title">当前管理员</div><div id="settingsUser" class="item-sub">--</div></div><span class="badge replied">已登录</span></div><div class="btn-row" style="margin-top:12px"><a class="btn" href="/" target="_blank">桌面完整控制台</a><button class="btn danger" onclick="logout()">退出登录</button></div></div>
+            <div class="card"><div class="item-top"><div><div class="item-title">当前管理员</div><div id="settingsUser" class="item-sub">--</div></div><span class="badge replied">已登录</span></div><div class="btn-row" style="margin-top:12px"><a class="btn" href="https://zero-ai.cloud" target="_blank"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg> 云盘 NAS</a><a class="btn" href="https://panel.zero-ai.cloud" target="_blank"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.03 7.03 0 00-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87a.48.48 0 00.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 00-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.61 3.61 0 0112 15.6z"/></svg> NAS设备</a></div><div class="btn-row" style="margin-top:8px"><a class="btn" href="/" target="_blank">桌面完整控制台</a><button class="btn danger" onclick="logout()">退出登录</button></div></div>
             <div class="card"><div class="card-head"><div><h2>环境与服务配置</h2><div class="sub">只提交修改过的字段，脱敏密钥不会被覆盖</div></div><button id="settingsSave" class="text-btn" onclick="saveSettings()">保存修改</button></div><div id="settingsGroups"><div class="loading">正在读取系统配置...</div></div></div>
         </section>
     </main>
@@ -230,10 +272,15 @@
     <nav class="bottom-nav">
         <button class="nav-btn active" data-tab="home" onclick="switchTab('home')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h14V10M9 20v-6h6v6"/></svg><span>工作台</span></button>
         <button class="nav-btn" data-tab="orders" onclick="switchTab('orders')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M6 3h12v18H6zM9 7h6M9 11h6M9 15h4"/></svg><span>订单</span></button>
-        <button class="nav-btn" data-tab="messages" onclick="switchTab('messages')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 4h16v13H9l-5 4zM8 9h8M8 13h5"/></svg><span>消息</span><span id="navMessageCount" class="nav-count" hidden>0</span></button>
+        <button id="navBtnMessages" class="nav-btn" data-tab="messages" onclick="switchTab('messages')" hidden><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 4h16v13H9l-5 4zM8 9h8M8 13h5"/></svg><span>消息</span><span id="navMessageCount" class="nav-count" hidden>0</span></button>
+        <button id="navBtnNas" class="nav-btn" data-tab="nas" onclick="switchTab('nas')"><svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M6.5 19h11a4.5 4.5 0 00.9-8.9A5.5 5.5 0 007.8 8.3 4 4 0 006.5 19z"/></svg><span>云盘</span></button>
         <button class="nav-btn" data-tab="studio" onclick="switchTab('studio')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3M4 12h16M10 12v2h4v-2"/></svg><span>工作室</span></button>
         <button class="nav-btn" data-tab="settings" onclick="switchTab('settings')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0015 19.4a1.7 1.7 0 00-1 .6 1.7 1.7 0 00-.4 1.1V21h-4v-.09A1.7 1.7 0 008.6 19.4a1.7 1.7 0 00-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 004.6 15a1.7 1.7 0 00-1.6-1H3v-4h.09A1.7 1.7 0 004.6 9a1.7 1.7 0 00-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 009 4.6a1.7 1.7 0 001-1.6V3h4v.09A1.7 1.7 0 0015 4.6a1.7 1.7 0 001.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0019.4 9a1.7 1.7 0 001.6 1h.09v4H21a1.7 1.7 0 00-1.6 1z"/></svg><span>设置</span></button>
     </nav>
+
+    <div id="mNasPreviewSheet" class="sheet" hidden onclick="if(event.target===this)closeMNasPreview()"><div class="sheet-panel"><div class="sheet-handle"></div><div class="sheet-head"><div style="min-width:0"><h2 id="mNasPrevTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">预览</h2></div><button class="close" onclick="closeMNasPreview()">×</button></div><div id="mNasPrevBody" style="max-height:65vh;overflow:auto;display:flex;align-items:center;justify-content:center;background:#0e1217;border-radius:12px;padding:10px;margin-bottom:12px"></div><a id="mNasPrevDown" class="btn primary block" href="#" download>下载原件</a></div></div>
+
+    <div id="mNasShareSheet" class="sheet" hidden onclick="if(event.target===this)closeMNasShare()"><div class="sheet-panel"><div class="sheet-handle"></div><div class="sheet-head"><div><h2 id="mNasShareTitle">创建分享链接</h2><div id="mNasSharePath" class="sub"></div></div><button class="close" onclick="closeMNasShare()">×</button></div><div class="field"><label>有效期</label><select id="mNasShareDays" class="input"><option value="1">1 天</option><option value="7" selected>7 天</option><option value="30">30 天</option><option value="0">永久有效</option></select></div><div class="field"><label>提取码（选填，留空免密）</label><input id="mNasShareCode" class="input" placeholder="例如 6688" maxlength="16"></div><button class="btn primary block" onclick="submitMNasShare()">生成 https://zero-ai.cloud 分享链接</button><div id="mNasShareRes" hidden style="margin-top:12px;padding:12px;border-radius:12px;background:rgba(111,168,165,.12);border:1px solid rgba(111,168,165,.3)"><div id="mNasShareUrl" class="mono" style="word-break:break-all;font-size:12px;color:#84c5c1;margin-bottom:8px"></div><button class="btn primary block" onclick="copyText(mNasLastShareCopy)">一键复制发给微信/QQ好友</button></div></div></div>
 
     <div id="orderSheet" class="sheet" hidden onclick="if(event.target===this)closeOrder()"><div class="sheet-panel"><div class="sheet-handle"></div><div class="sheet-head"><div><h2 id="orderTitle">订单详情</h2><div id="orderSubtitle" class="sub"></div></div><button class="close" onclick="closeOrder()">×</button></div>
         <div class="field-row"><div class="field"><label>客户 CN</label><input id="orderCn" class="input"></div><div class="field"><label>拍摄角色</label><input id="orderCharacter" class="input"></div></div>
@@ -294,14 +341,38 @@
         }
         function bindMessageButtons(root=document) { root.querySelectorAll('[data-message-index]').forEach(btn=>btn.addEventListener('click',()=>openChat(Number(btn.dataset.messageIndex)))); }
 
+        let imConnected = false;
+        let mNasSub = 'files', mNasPath = '', mNasItems = [], mNasShareTarget = { path:'', name:'' }, mNasLastShareCopy = '';
+
+        function updateImMode(online) {
+            imConnected = Boolean(online);
+            document.getElementById('navBtnMessages').hidden = !imConnected;
+            document.getElementById('navBtnNas').hidden = imConnected;
+            document.getElementById('homeWxBlock').hidden = !imConnected;
+            document.getElementById('homeNeedsCard').hidden = !imConnected;
+            document.getElementById('homeNasCard').hidden = imConnected;
+            if (!imConnected) {
+                document.getElementById('heroNeeds').textContent = '进入云盘 NAS 与分享';
+                if (state.tab === 'messages') switchTab('nas');
+            }
+        }
+        function heroActionClick() { if (imConnected) openNeedsReply(); else switchTab('nas'); }
+
         function switchTab(tab) {
+            if (tab === 'messages' && !imConnected) tab = 'nas';
             state.tab=tab;
-            ['home','orders','messages','studio','settings'].forEach(name=>{ document.getElementById(`page-${name}`).hidden=name!==tab; document.querySelector(`[data-tab="${name}"]`).classList.toggle('active',name===tab); });
-            document.getElementById('headerSubtitle').textContent={home:'手机中控台',orders:'订单与客户预约',messages:'完整双向消息档案',studio:'套餐、官网与后期交付',settings:'系统与账户设置'}[tab];
+            ['home','orders','messages','nas','studio','settings'].forEach(name=>{
+                const page = document.getElementById(`page-${name}`);
+                if (page) page.hidden = name !== tab;
+                const btn = document.querySelector(`[data-tab="${name}"]`);
+                if (btn) btn.classList.toggle('active', name === tab);
+            });
+            document.getElementById('headerSubtitle').textContent={home:'手机中控台',orders:'订单与客户预约',messages:'完整双向消息档案',nas:'云盘 NAS 与文件分享',studio:'套餐、官网与后期交付',settings:'系统与账户设置'}[tab] || '手机中控台';
             window.scrollTo(0,0);
             if(tab==='home') loadHome();
             if(tab==='orders') loadOrders();
             if(tab==='messages') loadMessages();
+            if(tab==='nas') refreshMobileNas();
             if(tab==='studio') loadStudioPanel();
             if(tab==='settings') loadSettings();
         }
@@ -309,15 +380,129 @@
 
         async function loadHome() {
             document.getElementById('homeSync').textContent='同步中';
-            const results=await Promise.allSettled([api('/api/overview/health'),api('/api/bookings'),api('/api/im/channels/status'),api('/api/im/conversations?status=needs_reply&limit=5')]);
+            const [hRes, bRes] = await Promise.allSettled([api('/api/overview/health'), api('/api/bookings')]);
             const errors=[];
-            if(results[0].status==='fulfilled') renderHealth(results[0].value); else errors.push('系统状态读取失败');
-            if(results[1].status==='fulfilled') { state.bookings=results[1].value.bookings || []; renderBookingMetrics(); renderHomeOrders(); } else errors.push('订单读取失败');
-            if(results[2].status==='fulfilled') renderChannels(results[2].value); else errors.push('客服状态读取失败');
-            if(results[3].status==='fulfilled') { const data=results[3].value; state.homeNeeds=data.items || []; renderHomeNeeds(data); } else errors.push('消息读取失败');
+            let imOnline = false;
+            if(hRes.status==='fulfilled') {
+                imOnline = Boolean(hRes.value?.services?.im_gateway?.online);
+                renderHealth(hRes.value);
+            } else { errors.push('系统状态读取失败'); }
+            updateImMode(imOnline);
+            if(bRes.status==='fulfilled') { state.bookings=bRes.value.bookings || []; renderBookingMetrics(); renderHomeOrders(); } else errors.push('订单读取失败');
+            if (imOnline) {
+                const [chRes, msgRes] = await Promise.allSettled([api('/api/im/channels/status'), api('/api/im/conversations?status=needs_reply&limit=5')]);
+                if(chRes.status==='fulfilled') renderChannels(chRes.value);
+                if(msgRes.status==='fulfilled') { const data=msgRes.value; state.homeNeeds=data.items || []; renderHomeNeeds(data); }
+            }
             const errorBox=document.getElementById('homeError'); errorBox.hidden=!errors.length; errorBox.textContent=errors.join('；');
             document.getElementById('homeSync').textContent=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false});
         }
+
+        function switchMobileNasSub(sub) {
+            mNasSub = sub;
+            ['files','shares','device'].forEach(s => {
+                document.getElementById('mNasView' + s[0].toUpperCase() + s.slice(1)).hidden = s !== sub;
+                document.getElementById('mNasSub' + s[0].toUpperCase() + s.slice(1)).classList.toggle('active', s === sub);
+            });
+            refreshMobileNas();
+        }
+        function refreshMobileNas() {
+            if (mNasSub === 'files') loadMobileNasDir(mNasPath);
+            else if (mNasSub === 'shares') loadMobileNasShares();
+            else loadMobileNasDevice();
+        }
+        function mNasPvType(n) {
+            const i = n.lastIndexOf('.'), e = i >= 0 ? n.slice(i+1).toLowerCase() : '';
+            if (['jpg','jpeg','png','gif','webp','bmp','svg'].includes(e)) return 'image';
+            if (['mp4','webm','mov','m4v'].includes(e)) return 'video';
+            if (['mp3','wav','ogg','m4a','flac'].includes(e)) return 'audio';
+            if (e === 'pdf') return 'pdf';
+            if (['txt','md','json','log','csv','py','js','css','html'].includes(e)) return 'text';
+            return 'none';
+        }
+        async function loadMobileNasDir(path) {
+            mNasPath = path || '';
+            const kw = document.getElementById('mNasSearch'); if (kw) kw.value = '';
+            const parts = mNasPath ? mNasPath.split('/') : [];
+            let ch = `<button class="text-btn" onclick="loadMobileNasDir('')"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg> 全部硬盘</button>`, acc = '';
+            for (const p of parts) { acc = acc ? `${acc}/${p}` : p; const t = acc; ch += ` / <button class="text-btn" onclick="loadMobileNasDir('${esc(t)}')">${esc(p)}</button>`; }
+            document.getElementById('mNasCrumb').innerHTML = ch;
+            document.getElementById('mNasFileList').innerHTML = '<div class="loading">正在读取目录...</div>';
+            try { const d = await api('/api/nas/list?path=' + encodeURIComponent(mNasPath)); mNasItems = d.items || []; renderMobileNasFiles(); }
+            catch (err) { document.getElementById('mNasFileList').innerHTML = empty(err.message, 'error'); }
+        }
+        function renderMobileNasFiles() {
+            const kw = (document.getElementById('mNasSearch')?.value || '').trim().toLowerCase();
+            let html = '';
+            if (mNasPath) {
+                const parent = mNasPath.includes('/') ? mNasPath.slice(0, mNasPath.lastIndexOf('/')) : '';
+                html += `<button class="list-item" onclick="loadMobileNasDir('${esc(parent)}')"><div class="item-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M19 7v4H5.83l3.58-3.59L8 6l-6 6 6 6 1.41-1.41L5.83 13H21V7z"/></svg> 返回上一级</div></button>`;
+            }
+            const items = mNasItems.filter(x => !kw || x.name.toLowerCase().includes(kw));
+            if (!items.length) html += empty('当前目录为空');
+            else for (const it of items) {
+                const p = mNasPath ? `${mNasPath}/${it.name}` : it.name, enc = encodeURIComponent(p);
+                if (it.is_dir) {
+                    html += `<div class="list-item"><div class="item-top" onclick="loadMobileNasDir('${esc(p)}')" style="cursor:pointer"><div class="item-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px;flex-shrink:0;color:#6fa8a5"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg> ${esc(it.name)}</div><span class="item-sub">文件夹</span></div><div class="btn-row" style="margin-top:8px"><button class="btn" onclick="openMNasShare('${esc(p)}','${esc(it.name)}')">分享</button><a class="btn" href="/api/nas/download-zip?path=${enc}">打包下载</a><button class="btn primary" onclick="loadMobileNasDir('${esc(p)}')">打开</button></div></div>`;
+                } else {
+                    const pt = mNasPvType(it.name);
+                    const pvBtn = pt !== 'none' ? `<button class="btn" onclick="openMNasPreview('${esc(p)}','${esc(it.name)}','${pt}')">预览</button>` : '';
+                    html += `<div class="list-item"><div class="item-top"><div class="item-title" style="word-break:break-all"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-2px;flex-shrink:0"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z"/></svg> ${esc(it.name)}</div></div><div class="item-sub" style="margin-top:4px">${esc(it.size_str)} · ${esc(it.mtime)}</div><div class="btn-row" style="margin-top:8px"><button class="btn" onclick="openMNasShare('${esc(p)}','${esc(it.name)}')">分享</button>${pvBtn}<a class="btn primary" href="/api/nas/download?path=${enc}" download>下载</a></div></div>`;
+                }
+            }
+            document.getElementById('mNasFileList').innerHTML = html;
+        }
+        async function openMNasPreview(path, name, type) {
+            const enc = encodeURIComponent(path), raw = '/api/nas/raw?path=' + enc, dl = '/api/nas/download?path=' + enc;
+            document.getElementById('mNasPrevTitle').textContent = name;
+            document.getElementById('mNasPrevDown').href = dl;
+            const body = document.getElementById('mNasPrevBody');
+            body.innerHTML = '<div class="loading">加载中...</div>';
+            document.getElementById('mNasPreviewSheet').hidden = false;
+            if (type === 'image') body.innerHTML = `<img src="${raw}" style="max-width:100%;max-height:60vh;border-radius:10px">`;
+            else if (type === 'video') body.innerHTML = `<video src="${raw}" controls autoplay playsinline webkit-playsinline style="max-width:100%;max-height:60vh;border-radius:10px"></video>`;
+            else if (type === 'audio') body.innerHTML = `<audio src="${raw}" controls autoplay style="width:100%"></audio>`;
+            else if (type === 'pdf') body.innerHTML = `<iframe src="${raw}" style="width:100%;height:60vh;border:0;background:#fff;border-radius:10px"></iframe>`;
+            else if (type === 'text') { const r = await fetch('/api/nas/text?path=' + enc); body.innerHTML = `<pre style="width:100%;margin:0;font-size:12px;white-space:pre-wrap;word-break:break-all">${esc(await r.text())}</pre>`; }
+        }
+        function closeMNasPreview() { document.getElementById('mNasPreviewSheet').hidden = true; document.getElementById('mNasPrevBody').innerHTML = ''; }
+        function openMNasShare(path, name) {
+            mNasShareTarget = { path, name };
+            document.getElementById('mNasShareTitle').textContent = '分享 · ' + name;
+            document.getElementById('mNasSharePath').textContent = '/' + path;
+            document.getElementById('mNasShareCode').value = '';
+            document.getElementById('mNasShareRes').hidden = true;
+            document.getElementById('mNasShareSheet').hidden = false;
+        }
+        function closeMNasShare() { document.getElementById('mNasShareSheet').hidden = true; }
+        async function submitMNasShare() {
+            const days = parseInt(document.getElementById('mNasShareDays').value, 10), code = document.getElementById('mNasShareCode').value.trim();
+            const d = await api('/api/nas/share/create', { method: 'POST', body: JSON.stringify({ path: mNasShareTarget.path, days, code }) });
+            document.getElementById('mNasShareUrl').textContent = d.url + (code ? `  (提取码: ${code})` : '');
+            mNasLastShareCopy = code ? `ZERO STUDIO 分享了「${mNasShareTarget.name}」给你：\n链接：${d.url}\n提取码：${code}` : `ZERO STUDIO 分享了「${mNasShareTarget.name}」给你：\n链接：${d.url}`;
+            document.getElementById('mNasShareRes').hidden = false;
+            toast('分享链接已生成');
+        }
+        async function loadMobileNasShares() {
+            const box = document.getElementById('mNasShareList'); box.innerHTML = '<div class="loading">加载中...</div>';
+            const list = (await api('/api/nas/share/list')).shares || [];
+            if (!list.length) { box.innerHTML = empty('暂无分享链接'); return; }
+            box.innerHTML = list.map(s => {
+                const cp = s.code ? `链接：${s.url}  提取码：${s.code}` : s.url;
+                return `<div class="list-item"><div class="item-top"><div class="item-title">${esc(s.name)}</div><span class="badge">${s.code ? esc(s.code) : '免密'}</span></div><div class="item-sub" style="margin-top:4px;word-break:break-all">${esc(s.url)}</div><div class="item-sub">到期：${esc(s.expire_str)}</div><div class="btn-row" style="margin-top:8px"><button class="btn primary" onclick="copyText('${esc(cp)}')">复制</button><button class="btn danger" onclick="delMNasShare('${esc(s.token)}')">取消</button></div></div>`;
+            }).join('');
+        }
+        async function delMNasShare(token) { await api('/api/nas/share/delete', { method: 'POST', body: JSON.stringify({ token }) }); toast('已取消分享'); loadMobileNasShares(); }
+        async function loadMobileNasDevice() {
+            const d = await api('/api/nas/device/status');
+            if (d.wifi) { document.getElementById('mNasAp24').value = d.wifi.ap24_ssid || ''; document.getElementById('mNasAp5').value = d.wifi.ap5_ssid || ''; document.getElementById('mNasApKey').value = d.wifi.ap_key || ''; }
+            const disks = d.disks || [];
+            document.getElementById('mNasDiskList').innerHTML = disks.length ? disks.map(x => `<div class="list-item"><div class="item-top"><div class="item-title">${esc(x.part)} · ${esc(x.size)}</div><span class="badge replied">${esc(x.fstype).toUpperCase()}</span></div><div class="btn-row" style="margin-top:8px"><input id="mnd_${esc(x.uuid)}" class="input" value="${esc(x.alias)}" style="flex:1"><button class="btn primary" onclick="mNasRename('${esc(x.uuid)}')">改名</button></div></div>`).join('') : empty('未检测到硬盘');
+        }
+        async function mNasRename(uuid) { const name = document.getElementById('mnd_' + uuid).value.trim(); await api('/api/nas/device/rename', { method: 'POST', body: JSON.stringify({ uuid, name, enabled: '1' }) }); toast('名称已更新并三端同步'); loadMobileNasDevice(); }
+        async function mNasRemount() { toast('正在重新扫描挂载...'); await api('/api/nas/device/remount', { method: 'POST' }); toast('扫描挂载完成'); loadMobileNasDevice(); }
+        async function mNasSaveSmbPass() { const p = document.getElementById('mNasSmbPass').value.trim(); if (p.length < 4) return toast('密码至少4位','err'); await api('/api/nas/device/smbpass', { method: 'POST', body: JSON.stringify({ password: p }) }); document.getElementById('mNasSmbPass').value = ''; toast('共享密码已更新'); }
+        async function mNasSaveApWifi() { await api('/api/nas/device/wifi_ap', { method: 'POST', body: JSON.stringify({ ap24_ssid: document.getElementById('mNasAp24').value, ap5_ssid: document.getElementById('mNasAp5').value, ap_key: document.getElementById('mNasApKey').value }) }); toast('Wi-Fi 热点已更新'); }
         function renderHealth(h) {
             const cells=[['客户官网',h.services?.booking_site?.online],['聊单引擎',h.services?.im_gateway?.online],['显卡加速',h.gpu?.online],['公网访问',h.tunnel?.online]];
             document.getElementById('healthGrid').innerHTML=cells.map(([label,online])=>`<div class="status-cell"><span class="dot ${online?'ok':'bad'}"></span><span>${label} · ${online?'在线':'离线'}</span></div>`).join('');

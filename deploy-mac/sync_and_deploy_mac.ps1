@@ -19,7 +19,12 @@ $Files = @(
     "apps/booking-site/review.html",
     "apps/control-center/main.py",
     "apps/control-center/static/index.html",
+    "apps/control-center/static/mobile.html",
+    "apps/control-center/static/login.html",
     "services/im-gateway/brain.py",
+    "services/im-gateway/main.py",
+    "services/im-gateway/conversation_store.py",
+    "services/im-gateway/test_private_intake.py",
     "deploy-mac/restart_mac_services.sh",
     "deploy-mac/mac_watchdog.sh",
     "deploy-mac/install_mac_launchd.sh"

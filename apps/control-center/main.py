@@ -3210,6 +3210,9 @@ def create_app(
             "message": "配置已热重载" + (f"，已通知守护进程自动重启: {', '.join(reloaded)}" if reloaded else "（未检测到托管子服务 PID，已立即刷新中控台内存配置）"),
         }
 
+    from nas_routes import register_nas_routes
+    register_nas_routes(app, require_session)
+
     return app
 
 
