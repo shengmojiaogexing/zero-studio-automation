@@ -738,7 +738,7 @@ Windows 修图机推荐默认 `PS_BACKEND=auto`（自动优先使用 **COM + Ext
 
 <div align="center">
 
-<img src="docs/assets/qq_group_575914656.jpg" width="230" alt="ZERO STUDIO 交流 QQ 群 575914656 二维码" />
+<img src="docs/assets/qq_group_card.jpg" width="230" alt="ZERO STUDIO 交流 QQ 群 575914656 二维码" />
 
 <sub>📱 手机 QQ 扫一扫上方二维码，或直接搜索群号 <b>575914656</b> 加入群聊</sub>
 
