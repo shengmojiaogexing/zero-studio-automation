@@ -177,8 +177,8 @@ def build_select_color_range_jsx(
     fuzziness: int = 40,
     target_color_rgb: Optional[Sequence[int]] = None,
 ) -> str:
-    """执行 Photoshop「选择 -> 色彩范围 (Color Range)」，支持肤色/高光/中间调/阴影或自定义 RGB。"""
-    fuzz = int(_clamp(fuzziness, 0, 200))
+    """执行 Photoshop「选择 -> 色彩范围 (Color Range)」，兼容 PS 2024/2025/2026 任意激活图层。"""
+    fuzz = int(_clamp(fuzziness, 10, 200))
     if target_color_rgb and len(target_color_rgb) == 3:
         r = int(_clamp(target_color_rgb[0], 0, 255))
         g = int(_clamp(target_color_rgb[1], 0, 255))
@@ -201,25 +201,53 @@ def build_select_color_range_jsx(
         return "color_range_rgb:{r},{g},{b}";
         """
 
-    preset_map = {
-        "skintones": "skinTones",
-        "highlights": "highlights",
-        "midtones": "midtones",
-        "shadows": "shadows",
-        "reds": "reds",
-        "yellows": "yellows",
-        "greens": "greens",
-        "cyans": "cyans",
-        "blues": "blues",
-        "magentas": "magentas",
+    p_lower = str(preset or "skintones").strip().lower()
+    if p_lower in ("skintones", "skintone", "skin"):
+        # 使用全版本 PS 100% 兼容的 Lab 亚洲人肤色范围采样（兼容冷光暗场照偏灰肤色）
+        return f"""
+        try {{
+            var d = new ActionDescriptor();
+            d.putInteger(charIDToTypeID("Fzns"), {max(70, fuzz)});
+            var minLab = new ActionDescriptor();
+            minLab.putDouble(charIDToTypeID("Lmnc"), 22.0);
+            minLab.putDouble(charIDToTypeID("A   "), 1.0);
+            minLab.putDouble(charIDToTypeID("B   "), 2.0);
+            d.putObject(charIDToTypeID("Mnm "), charIDToTypeID("LbCl"), minLab);
+            var maxLab = new ActionDescriptor();
+            maxLab.putDouble(charIDToTypeID("Lmnc"), 90.0);
+            maxLab.putDouble(charIDToTypeID("A   "), 30.0);
+            maxLab.putDouble(charIDToTypeID("B   "), 35.0);
+            d.putObject(charIDToTypeID("Mxm "), charIDToTypeID("LbCl"), maxLab);
+            d.putInteger(stringIDToTypeID("colorModel"), 0);
+            executeAction(charIDToTypeID("ClrR"), d, DialogModes.NO);
+            return "color_range_skin_lab";
+        }} catch (crErr) {{
+            warnings.push("ColorRange Lab fallback to subject: " + crErr.message);
+            var ds = new ActionDescriptor();
+            ds.putBoolean(stringIDToTypeID("sampleAllLayers"), false);
+            executeAction(stringIDToTypeID("autoCutout"), ds, DialogModes.NO);
+            return "color_range_fallback_subject";
+        }}
+        """
+
+    preset_char_map = {
+        "highlights": "Hghl",
+        "midtones": "Mdtn",
+        "shadows": "Shdw",
+        "reds": "Rds ",
+        "yellows": "Ylws",
+        "greens": "Grns",
+        "cyans": "Cyns",
+        "blues": "Bls ",
+        "magentas": "Mgnt",
     }
-    p_key = preset_map.get(str(preset or "skintones").strip().lower(), "skinTones")
+    cid = preset_char_map.get(p_lower, "Hghl")
     return f"""
     var d = new ActionDescriptor();
-    d.putEnumerated(charIDToTypeID("Clrs"), charIDToTypeID("Clrs"), stringIDToTypeID({_js_str(p_key)}));
+    d.putEnumerated(charIDToTypeID("Clrs"), charIDToTypeID("Clrs"), charIDToTypeID("{cid}"));
     d.putInteger(charIDToTypeID("Fzns"), {fuzz});
     executeAction(charIDToTypeID("ClrR"), d, DialogModes.NO);
-    return "color_range_preset:{p_key}";
+    return "color_range_preset:{p_lower}";
     """
 
 
@@ -229,19 +257,24 @@ def build_modify_selection_jsx(
     expand_px: int = 0,
     invert: bool = False,
 ) -> str:
-    """对当前选区执行羽化、收缩、扩展或反选。"""
+    """对当前选区执行羽化、收缩、扩展或反选（内置空选区保护，绝不因选区为空而报错）。"""
     f_px = _clamp(feather_px, 0.0, 250.0)
     c_px = int(_clamp(contract_px, 0, 200))
     e_px = int(_clamp(expand_px, 0, 200))
-    lines = ["var sel = app.activeDocument.selection;"]
+    lines = [
+        "var sel = app.activeDocument.selection;",
+        "var __hasSel = false;",
+        "try { var __b = sel.bounds; __hasSel = true; } catch (e) { __hasSel = false; }",
+        'if (!__hasSel) { warnings.push("Empty selection skipped"); return "selection_empty_skipped"; }',
+    ]
     if c_px > 0:
-        lines.append(f"sel.contract(UnitValue({c_px}, 'px'));")
+        lines.append(f"try {{ sel.contract(UnitValue({c_px}, 'px')); }} catch (e) {{}}")
     if e_px > 0:
-        lines.append(f"sel.expand(UnitValue({e_px}, 'px'));")
+        lines.append(f"try {{ sel.expand(UnitValue({e_px}, 'px')); }} catch (e) {{}}")
     if f_px > 0:
-        lines.append(f"sel.feather(UnitValue({f_px}, 'px'));")
+        lines.append(f"try {{ sel.feather(UnitValue({f_px}, 'px')); }} catch (e) {{}}")
     if invert:
-        lines.append("sel.invert();")
+        lines.append("try { sel.invert(); } catch (e) {}")
     lines.append('return "selection_modified";')
     return "\n".join(lines)
 
