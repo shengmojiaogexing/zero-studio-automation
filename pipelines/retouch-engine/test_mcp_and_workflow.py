@@ -85,6 +85,57 @@ class TestPSMCPAndDualModel(unittest.TestCase):
         self.assertEqual(prev["status"], "ok")
         self.assertIn("mean_luma", prev["metrics"])
 
+    def test_checkpoint_save_and_ai_backtrack_rollback(self):
+        kit = PSMCPToolkit(dry_run=True)
+        planner = Local8BMCPPlanner(
+            toolkit=kit,
+            mock_llm_fn=lambda ctx: [
+                {"name": "ps_add_exposure_layer", "arguments": {"exposure_delta": 0.2}},
+                {"name": "ps_add_color_balance_layer", "arguments": {"temp_delta": -3.0, "tint_delta": 0.0}},
+                {"name": "ps_add_curves_layer", "arguments": {"curves_points": [[0, 0], [128, 95], [255, 255]]}},
+                {"name": "ps_apply_high_pass_sharpen", "arguments": {"radius": 2.0, "opacity": 60.0}},
+            ],
+        )
+
+        review_calls = []
+
+        def mock_review(ctx):
+            review_calls.append(ctx["round"])
+            if ctx["round"] == 1:
+                # 首次终盘审查发现第 3 步曲线压得过暗 -> 逆推回退到 ckpt_01（第 2 步后的干净 PSD）并修正
+                return {
+                    "passed": False,
+                    "root_cause": "第 3 步曲线中间调压暗过度，导致肤色偏灰",
+                    "rollback_to_checkpoint": "ckpt_01",
+                    "fix_calls": [
+                        {"name": "ps_add_curves_layer", "arguments": {"curves_points": [[0, 6], [128, 132], [255, 255]]}},
+                        {"name": "ps_apply_high_pass_sharpen", "arguments": {"radius": 1.6, "opacity": 50.0}},
+                    ],
+                }
+            return {"passed": True, "reason": "回退修正后肤色通透、高光自然，审查通过"}
+
+        res = planner.execute_with_checkpoints_and_backtrack(
+            source_path=Path("E:/work/in.tiff"),
+            high_level_plan={"exposure_delta": 0.2},
+            out_psd_path=Path("E:/work/final.psd"),
+            out_preview_jpg=Path("E:/work/final.jpg"),
+            checkpoint_every=2,
+            max_backtrack_rounds=2,
+            review_fn=mock_review,
+        )
+
+        # 验证每 2 步保存 1 次检查点（共 4 步 -> ckpt_01, ckpt_02）
+        self.assertEqual([c["id"] for c in res["checkpoints"]], ["ckpt_01", "ckpt_02"])
+        # 验证终盘审查共触发 2 轮（第 1 轮发现问题逆推回退，第 2 轮复审通过）
+        self.assertEqual(review_calls, [1, 2])
+        self.assertEqual(len(res["backtrack_history"]), 1)
+        self.assertEqual(res["backtrack_history"][0]["rollback_to_checkpoint"], "ckpt_01")
+        self.assertTrue(res["final_review"]["passed"])
+        # 验证回退时确实重新打开了 ckpt_01_step2.psd
+        opened_files = [h["args"]["file_path"] for h in kit.call_history if h["tool"] == "ps_open_document"]
+        self.assertEqual(len(opened_files), 2)
+        self.assertTrue(opened_files[1].endswith("ckpt_01_step2.psd"))
+
     def test_adb_mcp_client_protocol_and_clamping(self):
         received = []
 

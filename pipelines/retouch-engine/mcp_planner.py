@@ -475,3 +475,153 @@ class Local8BMCPPlanner:
             "output_preview_path": str(out_preview_jpg) if out_preview_jpg else "",
             "warnings": warnings,
         }
+
+    # ==================== 检查点保存 + 终盘审查 + AI 逆推回退 ====================
+
+    def execute_with_checkpoints_and_backtrack(
+        self,
+        source_path: Path,
+        high_level_plan: Dict[str, Any],
+        out_psd_path: Path,
+        out_preview_jpg: Path,
+        brief_text: str = "",
+        ps_action: Optional[Dict[str, str]] = None,
+        layer_prefix: str = "ZS",
+        checkpoint_every: int = 3,
+        max_backtrack_rounds: int = 2,
+        review_fn: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """
+        生产级「检查点存档 + 终盘审查 + AI 逆推回退修改」工作流：
+        1. 连续执行 MCP 工具调用，**不在中途频繁调视觉模型自检**；
+        2. 每执行 `checkpoint_every` 步静默保存一次检查点 `(ckpt_XX.psd, ckpt_XX.jpg)` 与步骤映射；
+        3. 全部执行并保存最终成片后，再调用 `review_fn` 对保存好的图片做终盘审查；
+        4. 若终盘审查判定有问题（`passed=False`）：
+           - AI 根据各检查点步骤清单与预览图**逆推**定位出问题前的最后一个干净检查点 (`rollback_to_checkpoint`)；
+           - 自动回退打开该检查点 PSD，执行定向修正工具调用 (`fix_calls`)；
+           - 重新保存成片并再次审查，直至通过或达到 `max_backtrack_rounds` 上限。
+        """
+        tool_calls, planner_mode = self.decompose_to_tool_calls(
+            high_level_plan=high_level_plan,
+            brief_text=brief_text,
+            ps_action=ps_action,
+            layer_prefix=layer_prefix,
+        )
+
+        ckpt_every = max(1, int(checkpoint_every))
+        ckpt_dir = Path(out_psd_path).parent / ".checkpoints" / Path(out_psd_path).stem
+        if not getattr(self.toolkit, "dry_run", False):
+            ckpt_dir.mkdir(parents=True, exist_ok=True)
+
+        checkpoints: List[Dict[str, Any]] = []
+        executed: List[Dict[str, Any]] = []
+        warnings: List[str] = []
+
+        # ---- 阶段 1：连续执行 + 每 N 步静默保存检查点（不做中途 AI 自检） ----
+        self.toolkit.ps_open_document(str(source_path))
+        try:
+            for idx, step in enumerate(tool_calls, start=1):
+                name = step["name"]
+                args = step["arguments"]
+                try:
+                    res = self.toolkit.dispatch_tool(name, args)
+                    executed.append({"step": idx, "tool": name, "args": args, "status": res.get("status", "ok")})
+                    for w in (res.get("warnings") or []):
+                        warnings.append(str(w))
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"step {idx} {name} skipped: {exc}")
+                    executed.append({"step": idx, "tool": name, "args": args, "status": "error", "error": str(exc)})
+
+                is_ckpt_step = (idx % ckpt_every == 0) or (idx == len(tool_calls))
+                if is_ckpt_step:
+                    ckpt_id = f"ckpt_{len(checkpoints) + 1:02d}"
+                    ckpt_psd = ckpt_dir / f"{ckpt_id}_step{idx}.psd"
+                    ckpt_jpg = ckpt_dir / f"{ckpt_id}_step{idx}.jpg"
+                    self.toolkit.ps_save_psd(str(ckpt_psd))
+                    self.toolkit.ps_export_preview(str(ckpt_jpg), max_edge=1024, quality=88)
+                    checkpoints.append({
+                        "id": ckpt_id,
+                        "step_end": idx,
+                        "psd_path": str(ckpt_psd),
+                        "preview_path": str(ckpt_jpg),
+                        "steps": executed[max(0, idx - ckpt_every):idx],
+                    })
+
+            self.toolkit.ps_save_psd(str(out_psd_path))
+            self.toolkit.ps_export_preview(str(out_preview_jpg), max_edge=1024, quality=92)
+        finally:
+            self.toolkit.ps_close_document(save_changes=False)
+
+        # ---- 阶段 2 & 3：保存完后审查成品 -> 有问题则 AI 逆推回退检查点并定向修改 ----
+        backtrack_history: List[Dict[str, Any]] = []
+        final_review: Dict[str, Any] = {"passed": True, "reason": "未配置终盘审查器，直接交付人工终审"}
+
+        if review_fn is not None:
+            ckpt_by_id = {c["id"]: c for c in checkpoints}
+            for round_idx in range(1, max(1, int(max_backtrack_rounds)) + 1):
+                review = review_fn({
+                    "round": round_idx,
+                    "final_preview_path": str(out_preview_jpg),
+                    "final_psd_path": str(out_psd_path),
+                    "checkpoints": checkpoints,
+                    "executed_steps": executed,
+                    "plan": high_level_plan,
+                })
+                final_review = review if isinstance(review, dict) else {"passed": True}
+                if final_review.get("passed", True):
+                    break
+
+                # AI 逆推定位回退检查点
+                target_ckpt_id = str(final_review.get("rollback_to_checkpoint") or "").strip()
+                root_cause = str(final_review.get("root_cause") or "终盘审查未通过").strip()
+                fix_calls = self._filter_tool_calls(final_review.get("fix_calls") or [])
+
+                if target_ckpt_id in ckpt_by_id:
+                    rollback_psd = Path(ckpt_by_id[target_ckpt_id]["psd_path"])
+                else:
+                    target_ckpt_id = "source"
+                    rollback_psd = Path(source_path)
+
+                fix_executed: List[Dict[str, Any]] = []
+                self.toolkit.ps_open_document(str(rollback_psd))
+                try:
+                    for fstep in fix_calls:
+                        res = self.toolkit.dispatch_tool(fstep["name"], fstep["arguments"])
+                        fix_executed.append({"tool": fstep["name"], "args": fstep["arguments"], "status": res.get("status", "ok")})
+                    self.toolkit.ps_save_psd(str(out_psd_path))
+                    self.toolkit.ps_export_preview(str(out_preview_jpg), max_edge=1024, quality=92)
+                finally:
+                    self.toolkit.ps_close_document(save_changes=False)
+
+                backtrack_history.append({
+                    "round": round_idx,
+                    "root_cause": root_cause,
+                    "rollback_to_checkpoint": target_ckpt_id,
+                    "rollback_psd": str(rollback_psd),
+                    "fix_steps": fix_executed,
+                })
+
+            # 若最后一次回退修复后还没做最终复审，再补一次终审确认
+            if backtrack_history and not final_review.get("passed", True):
+                final_review = review_fn({
+                    "round": len(backtrack_history) + 1,
+                    "final_preview_path": str(out_preview_jpg),
+                    "final_psd_path": str(out_psd_path),
+                    "checkpoints": checkpoints,
+                    "executed_steps": executed,
+                    "backtrack_history": backtrack_history,
+                    "plan": high_level_plan,
+                })
+
+        return {
+            "status": "ok",
+            "planner_mode": planner_mode,
+            "steps_count": len(executed),
+            "executed_steps": executed,
+            "checkpoints": checkpoints,
+            "backtrack_history": backtrack_history,
+            "final_review": final_review,
+            "output_psd_path": str(out_psd_path),
+            "output_preview_path": str(out_preview_jpg),
+            "warnings": warnings,
+        }
