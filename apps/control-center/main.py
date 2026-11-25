@@ -3213,6 +3213,62 @@ def create_app(
     from nas_routes import register_nas_routes
     register_nas_routes(app, require_session)
 
+    # ==================== 拍前动作清单与手机端汇总接口 ====================
+
+    def _get_pose_store():
+        gw_dir = str(WORKSPACE_ROOT / "services" / "im-gateway")
+        if gw_dir not in sys.path:
+            sys.path.insert(0, gw_dir)
+        from pose_briefing import PoseBriefingStore
+        return PoseBriefingStore()
+
+    @app.get("/api/pose-sheets")
+    async def api_list_pose_sheets(
+        event_name: str = "",
+        date: str = "",
+        _: str = Depends(require_session),
+    ):
+        store = _get_pose_store()
+        return {
+            "status": "ok",
+            "sheets": store.list_sheets(event_name=event_name, date=date),
+            "markdown": store.render_mobile_summary(event_name=event_name, date=date),
+        }
+
+    @app.post("/api/pose-sheets/{booking_id}")
+    async def api_upsert_pose_sheet(
+        booking_id: int,
+        payload: Dict[str, Any],
+        _: str = Depends(require_session),
+    ):
+        store = _get_pose_store()
+        sheet = store.upsert_sheet(
+            booking_id=booking_id,
+            cn=str(payload.get("cn") or ""),
+            character=str(payload.get("character") or ""),
+            event_name=str(payload.get("event_name") or ""),
+            date=str(payload.get("date") or ""),
+            time_slot=str(payload.get("time") or payload.get("time_slot") or ""),
+            poses=payload.get("poses") or [],
+            props=payload.get("props") or [],
+            lighting_mood=str(payload.get("lighting_mood") or ""),
+            avoid=payload.get("avoid") or [],
+            reference_images=payload.get("reference_images") or [],
+        )
+        return {"status": "ok", "sheet": sheet}
+
+    @app.post("/api/pose-sheets/push")
+    async def api_push_pose_sheets(
+        payload: Optional[Dict[str, Any]] = None,
+        _: str = Depends(require_session),
+    ):
+        body = payload or {}
+        store = _get_pose_store()
+        return store.push_summary_to_mobile(
+            event_name=str(body.get("event_name") or ""),
+            date=str(body.get("date") or ""),
+        )
+
     return app
 
 

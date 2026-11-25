@@ -149,16 +149,16 @@
                 <div class="flex flex-col justify-center gap-6">
                     <div class="constraint-card py-6 px-8 flex items-center gap-6 hover:bg-white hover:text-black cursor-pointer group transition-colors">
                         <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-black/5"><svg class="w-5 h-5 text-[#8b92a5] group-hover:text-black" fill="currentColor" viewBox="0 0 24 24"><path d="M12.004 2C6.485 2 2.008 5.86 2.008 10.612c0 2.706 1.488 5.12 3.82 6.643-.284 1.343-1.026 2.716-1.054 2.771-.044.091-.016.195.068.257.086.064.204.062.29-.005.025-.018 1.834-1.378 3.268-1.573 1.096.31 2.308.483 3.596.483 5.522 0 10.003-3.86 10.003-8.613C22.007 5.86 17.525 2 12.004 2zm3.324 7.218c.613 0 1.11.455 1.11 1.018 0 .56-.497 1.016-1.11 1.016-.612 0-1.11-.456-1.11-1.016 0-.563.498-1.018 1.11-1.018zm-6.648 0c.613 0 1.11.455 1.11 1.018 0 .56-.497 1.016-1.11 1.016-.612 0-1.11-.456-1.11-1.016 0-.563.498-1.018 1.11-1.018z"/></svg></div>
-                        <div><span class="block text-[10px] font-black text-[#8b92a5] group-hover:text-gray-500 uppercase tracking-widest mb-1">WeChat</span><span class="block text-xl font-bold select-all">YOUR_WECHAT_ID</span></div>
+                        <div><span class="block text-[10px] font-black text-[#8b92a5] group-hover:text-gray-500 uppercase tracking-widest mb-1">WeChat</span><span id="contact-wechat" class="block text-xl font-bold select-all">请在后台配置微信号</span></div>
                     </div>
                     <div class="constraint-card py-6 px-8 flex items-center gap-6 hover:bg-white hover:text-black cursor-pointer group transition-colors">
                         <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-black/5"><span class="font-black text-lg text-[#8b92a5] group-hover:text-black">Q</span></div>
-                        <div><span class="block text-[10px] font-black text-[#8b92a5] group-hover:text-gray-500 uppercase tracking-widest mb-1">QQ Group</span><span class="block text-xl font-bold select-all">YOUR_QQ_GROUP</span></div>
+                        <div><span class="block text-[10px] font-black text-[#8b92a5] group-hover:text-gray-500 uppercase tracking-widest mb-1">QQ Group</span><span id="contact-qq" class="block text-xl font-bold select-all">请在后台配置 QQ / 群号</span></div>
                     </div>
                 </div>
             </div>
         </section>
-        <footer class="py-12 text-center border-t border-white/5 text-[10px] text-[#8b92a5] font-bold tracking-[0.3em] uppercase"><p>© 2026 ZERO STUDIO. ALL RIGHTS RESERVED.</p></footer>
+        <footer class="py-12 text-center border-t border-white/5 text-[10px] text-[#8b92a5] font-bold tracking-[0.3em] uppercase"><p>© 2026 <span id="footer-brand">ZERO STUDIO</span>. ALL RIGHTS RESERVED.</p></footer>
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -260,8 +260,21 @@
 
             function fetchSettings() {
                 fetch('/api/settings').then(res => res.json()).then(data => {
-                    if (data) { 
-                        if (data.notice) document.getElementById('notice-text').innerText = data.notice; 
+                    if (data) {
+                        if (data.notice) document.getElementById('notice-text').innerText = data.notice;
+                        if (data.studio_name) {
+                            document.title = `${data.studio_name} | 摄影企划与自助预约`;
+                            const fb = document.getElementById('footer-brand');
+                            if (fb) fb.innerText = data.studio_name;
+                        }
+                        if (data.wechat_id) {
+                            const wEl = document.getElementById('contact-wechat');
+                            if (wEl) wEl.innerText = data.wechat_id;
+                        }
+                        if (data.qq_group) {
+                            const qEl = document.getElementById('contact-qq');
+                            if (qEl) qEl.innerText = data.qq_group;
+                        }
                     }
                 }).catch(e => console.error(e));
             }

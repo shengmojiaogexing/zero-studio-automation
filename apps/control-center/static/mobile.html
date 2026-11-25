@@ -182,6 +182,10 @@
                 <div class="btn-row"><button class="btn primary" onclick="switchTab('nas')">浏览与分享文件</button><button class="btn" onclick="switchTab('nas');switchMobileNasSub('device')">硬盘与 Wi-Fi</button></div>
             </div>
             <div class="card">
+                <div class="card-head"><h2>现场拍摄动作清单</h2><div style="display:flex;gap:8px"><button class="text-btn" onclick="loadPoseSheets()">刷新</button><button class="text-btn" onclick="pushPoseSheets()">推送微信</button></div></div>
+                <div id="homePoseSheets" class="list"><div class="loading">正在读取拍前动作清单...</div></div>
+            </div>
+            <div class="card">
                 <div class="card-head"><h2>最近订单</h2><button class="text-btn" onclick="switchTab('orders')">订单管理</button></div>
                 <div id="homeOrders" class="list"><div class="loading">正在读取订单...</div></div>
             </div>
@@ -632,7 +636,18 @@
         async function testSetting(action,btn){btn.disabled=true;const old=btn.textContent;btn.textContent='测试中...';try{const result=await api(`/api/settings/${action}`,{method:'POST'});const target=btn.nextElementSibling;if(target)target.textContent=JSON.stringify(result);toast('连通性测试完成');}catch(err){toast(err.message,'err');}finally{btn.disabled=false;btn.textContent=old;}}
         async function logout(){await fetch('/api/auth/logout',{method:'POST'});location.href='/login?next=/mobile';}
 
-        (async()=>{try{const auth=await api('/api/auth/status');if(!auth.authenticated){location.href='/login?next=/mobile';return;}document.getElementById('settingsUser').textContent=auth.username||'admin';await loadHome();setInterval(()=>{if(!document.hidden&&document.getElementById('chatSheet').hidden)loadHome();},30000);}catch(err){toast(err.message,'err');}})();
+        async function loadPoseSheets(){
+            const box=document.getElementById('homePoseSheets');if(!box)return;
+            try{
+                const data=await api('/api/pose-sheets');const sheets=data.sheets||[];
+                box.innerHTML=sheets.length?sheets.map(s=>`<div class="list-item"><div class="item-top"><div class="item-title">#${Number(s.booking_id)} · ${esc(s.cn||'未填CN')} · ${esc(s.character||'未填角色')}</div><span class="badge BOOKED">${esc((s.date||'')+' '+(s.time||''))}</span></div>${(s.poses||[]).length?`<div class="item-preview">动作：${esc(s.poses.join(' / '))}</div>`:''}${(s.props||[]).length?`<div class="item-sub">道具：${esc(s.props.join('、'))}</div>`:''}${s.lighting_mood?`<div class="item-sub">氛围：${esc(s.lighting_mood)}</div>`:''}${(s.avoid||[]).length?`<div class="item-sub" style="color:var(--rose)">避雷：${esc(s.avoid.join('、'))}</div>`:''}</div>`).join(''):empty('暂无已登记的拍前动作清单（客户锁档后私聊发送动作或参考图会自动汇总到这里）');
+            }catch(err){box.innerHTML=empty(err.message,'error');}
+        }
+        async function pushPoseSheets(){
+            try{await api('/api/pose-sheets/push',{method:'POST',body:JSON.stringify({})});toast('动作汇总已保存并触发推送');}catch(err){toast(err.message,'err');}
+        }
+
+        (async()=>{try{const auth=await api('/api/auth/status');if(!auth.authenticated){location.href='/login?next=/mobile';return;}document.getElementById('settingsUser').textContent=auth.username||'admin';await Promise.all([loadHome(),loadPoseSheets()]);setInterval(()=>{if(!document.hidden&&document.getElementById('chatSheet').hidden){loadHome();loadPoseSheets();}},30000);}catch(err){toast(err.message,'err');}})();
         window.addEventListener('unhandledrejection',event=>{console.error(event.reason);});
     </script>
 </body>

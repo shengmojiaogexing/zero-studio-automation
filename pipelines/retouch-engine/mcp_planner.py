@@ -33,6 +33,7 @@ if str(ENGINE_DIR) not in sys.path:
 
 load_dotenv(WORKSPACE_ROOT / ".env", override=False)
 
+from adb_mcp_client import AdbMCPPhotoshopClient  # noqa: E402
 from gemini_colorist import clamp_retouch_plan  # noqa: E402
 from ps_mcp_server import PSMCPToolkit  # noqa: E402
 
@@ -166,6 +167,8 @@ class Local8BMCPPlanner:
         api_key: Optional[str] = None,
         timeout: float = 30.0,
         toolkit: Optional[PSMCPToolkit] = None,
+        adb_client: Optional[AdbMCPPhotoshopClient] = None,
+        ps_mcp_backend: Optional[str] = None,
         mock_llm_fn: Optional[Callable[[Dict[str, Any]], List[Dict[str, Any]]]] = None,
     ):
         env_enabled = os.getenv("LOCAL_MCP_PLANNER_ENABLED", "")
@@ -190,7 +193,90 @@ class Local8BMCPPlanner:
         self.api_key = (api_key or os.getenv("LOCAL_MCP_PLANNER_API_KEY") or "lm-studio").strip()
         self.timeout = float(timeout)
         self.toolkit = toolkit or PSMCPToolkit()
+        self.adb_client = adb_client or AdbMCPPhotoshopClient()
+        self.ps_mcp_backend = (
+            ps_mcp_backend or os.getenv("PS_MCP_BACKEND") or "auto"
+        ).strip().lower()
         self.mock_llm_fn = mock_llm_fn
+
+    def _should_use_adb_mcp(self) -> bool:
+        if self.ps_mcp_backend == "adb_mcp":
+            return True
+        if self.ps_mcp_backend == "com":
+            return False
+        if getattr(self.toolkit, "dry_run", False):
+            return False
+        # auto: 若 mikechambers/adb-mcp 代理 (3001) 在线则优先走 adb-mcp，否则回退本地 COM
+        return self.adb_client.is_proxy_online()
+
+    def _execute_via_adb_mcp(
+        self,
+        source_path: Path,
+        tool_calls: List[Dict[str, Any]],
+        out_psd_path: Path,
+        out_preview_jpg: Optional[Path],
+        planner_mode: str,
+    ) -> Dict[str, Any]:
+        """将 8B 拆解出的调色工具调用路由到 mikechambers/adb-mcp (UXP Socket.IO)。"""
+        executed: List[Dict[str, Any]] = []
+        warnings: List[str] = []
+
+        self.adb_client.open_photoshop_file(str(source_path))
+        layers_resp = self.adb_client.get_layers()
+        layer_id = 1
+        raw_layers = (layers_resp.get("layers") or layers_resp.get("response") or []) if isinstance(layers_resp, dict) else []
+        if isinstance(raw_layers, list) and raw_layers and isinstance(raw_layers[0], dict):
+            layer_id = int(raw_layers[0].get("id") or 1)
+
+        for step in tool_calls:
+            name = step["name"]
+            args = step["arguments"]
+            try:
+                if name == "ps_add_exposure_layer":
+                    brightness = int(round(float(args.get("exposure_delta") or 0.0) * 28))
+                    self.adb_client.add_brightness_contrast(layer_id=layer_id, brightness=brightness, contrast=0)
+                    executed.append({"tool": "adb_mcp:addBrightnessContrast", "args": {"brightness": brightness}, "status": "ok"})
+                elif name == "ps_add_color_balance_layer":
+                    td = float(args.get("temp_delta") or 0.0)
+                    ti = float(args.get("tint_delta") or 0.0)
+                    mid = [int(round(td * 0.6)), int(round(-ti * 0.6)), int(round(-td * 0.9))]
+                    self.adb_client.add_color_balance(layer_id=layer_id, midtones=mid)
+                    executed.append({"tool": "adb_mcp:addColorBalance", "args": {"midtones": mid}, "status": "ok"})
+                elif name == "ps_add_hsl_layer":
+                    hsl = args.get("hsl_adjustments") or {}
+                    sats = [float(v.get("saturation") or 0.0) for v in hsl.values() if isinstance(v, dict)]
+                    avg_sat = int(round(sum(sats) / max(len(sats), 1))) if sats else 0
+                    self.adb_client.add_vibrance(layer_id=layer_id, vibrance=avg_sat, saturation=int(round(avg_sat * 0.5)))
+                    executed.append({"tool": "adb_mcp:addVibrance", "args": {"vibrance": avg_sat}, "status": "ok"})
+                else:
+                    warnings.append(f"adb-mcp 暂未映射工具 {name}，已安全跳过")
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"adb-mcp {name} skipped: {exc}")
+                executed.append({"tool": name, "args": args, "status": "error", "error": str(exc)})
+
+        self.adb_client.save_document_as(str(out_psd_path), file_type="PSD")
+        if out_preview_jpg is not None:
+            tmp_png = out_preview_jpg.with_suffix(".adb_tmp.png")
+            self.adb_client.save_preview_png(str(tmp_png))
+            if tmp_png.exists():
+                from PIL import Image
+                with Image.open(tmp_png) as im:
+                    im.convert("RGB").save(out_preview_jpg, format="JPEG", quality=92)
+                try:
+                    tmp_png.unlink()
+                except OSError:
+                    pass
+
+        return {
+            "status": "ok",
+            "backend": "adb_mcp",
+            "planner_mode": planner_mode,
+            "steps_count": len(executed),
+            "executed_steps": executed,
+            "output_psd_path": str(out_psd_path),
+            "output_preview_path": str(out_preview_jpg) if out_preview_jpg else "",
+            "warnings": warnings,
+        }
 
     def _resolve_model_name(self) -> str:
         if self.model and self.model.lower() != "auto":
@@ -332,6 +418,15 @@ class Local8BMCPPlanner:
             ps_action=ps_action,
             layer_prefix=layer_prefix,
         )
+
+        if self._should_use_adb_mcp():
+            return self._execute_via_adb_mcp(
+                source_path=source_path,
+                tool_calls=tool_calls,
+                out_psd_path=out_psd_path,
+                out_preview_jpg=out_preview_jpg,
+                planner_mode=planner_mode,
+            )
 
         executed: List[Dict[str, Any]] = []
         warnings: List[str] = []

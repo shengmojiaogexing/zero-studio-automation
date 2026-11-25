@@ -1544,23 +1544,49 @@ async function ensureBookingQrPayload(booking, baseUrl) {
     return fresh;
 }
 
-app.get('/api/settings', (req, res) => {
-    db.get("SELECT * FROM settings WHERE id = 1", (err, row) => {
-        if (!row) {
-            res.json({ notice: '', price_cz: 80, price_hgh: 180 });
-        } else {
-            res.json({
-                notice: row.notice || '',
-                price_cz: row.price_cz || 80,
-                price_hgh: row.price_hgh || 180
-            });
+app.get('/api/settings', async (req, res) => {
+    try {
+        const row = await dbGet("SELECT * FROM settings WHERE id = 1");
+        const pRow = await dbGet("SELECT data FROM portal_config WHERE id = 1");
+        let brand = {};
+        if (pRow && pRow.data) {
+            try { brand = JSON.parse(pRow.data) || {}; } catch (_) {}
         }
-    });
+        res.json({
+            notice: (row && row.notice) || '',
+            price_cz: (row && row.price_cz) || 80,
+            price_hgh: (row && row.price_hgh) || 180,
+            studio_name: brand.studio_name || process.env.STUDIO_NAME || 'ZERO STUDIO',
+            wechat_id: brand.wechat_id || '',
+            qq_group: brand.qq_group || ''
+        });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.post('/api/settings', adminAuth, (req, res) => {
-    const { notice, price_cz, price_hgh } = req.body || {};
-    db.run("INSERT OR REPLACE INTO settings (id, notice, price_cz, price_hgh) VALUES (1, ?, ?, ?)", [notice, price_cz, price_hgh], () => res.json({ status: 'ok' }));
+app.post('/api/settings', adminAuth, async (req, res) => {
+    try {
+        const { notice, price_cz, price_hgh, studio_name, wechat_id, qq_group } = req.body || {};
+        await dbRun(
+            "INSERT OR REPLACE INTO settings (id, notice, price_cz, price_hgh) VALUES (1, ?, ?, ?)",
+            [notice || '', price_cz || 80, price_hgh || 180]
+        );
+        if (studio_name !== undefined || wechat_id !== undefined || qq_group !== undefined) {
+            const pRow = await dbGet("SELECT data FROM portal_config WHERE id = 1");
+            let existing = {};
+            if (pRow && pRow.data) {
+                try { existing = JSON.parse(pRow.data) || {}; } catch (_) {}
+            }
+            if (studio_name !== undefined) existing.studio_name = String(studio_name).trim();
+            if (wechat_id !== undefined) existing.wechat_id = String(wechat_id).trim();
+            if (qq_group !== undefined) existing.qq_group = String(qq_group).trim();
+            await dbRun("INSERT OR REPLACE INTO portal_config (id, data) VALUES (1, ?)", [JSON.stringify(existing)]);
+        }
+        res.json({ status: 'ok' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
 app.get('/api/portal_settings', (req, res) => {
@@ -1947,12 +1973,25 @@ app.get('/api/internal/bookings/:id/slate-qr', requireInternalKey, async (req, r
             return res.status(404).json({ status: 'error', message: 'Booking not found' });
         }
 
-        const payload = await ensureBookingQrPayload(booking, getPublicBaseUrl(req));
+        const roleRaw = String((req.query && (req.query.role || req.query.phase)) || '').trim().toLowerCase();
+        const role = (roleRaw === 'start' || roleRaw === 'end') ? roleRaw : '';
+        let payload = await ensureBookingQrPayload(booking, getPublicBaseUrl(req));
+        if (role) {
+            // 显式拍前开始码 / 拍后结束码：供 cull_and_cluster.py 精准闭合分组
+            payload = JSON.stringify({
+                booking_id: booking.id,
+                cn: booking.cn || '',
+                character: booking.character || '',
+                event_name: booking.event_name || '',
+                slate_role: role
+            });
+        }
 
         const pngBuffer = await renderQrPng(payload);
 
         res.setHeader('Content-Type', 'image/png');
-        res.setHeader('Content-Disposition', `inline; filename="slate-qr-${booking.id}.png"`);
+        const suffix = role ? `-${role}` : '';
+        res.setHeader('Content-Disposition', `inline; filename="slate-qr-${booking.id}${suffix}.png"`);
         res.send(pngBuffer);
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });

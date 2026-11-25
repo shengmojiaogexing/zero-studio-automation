@@ -17,6 +17,7 @@ from openai import AsyncOpenAI
 
 from adapters.base import IMAdapter, IncomingMessage
 from conversation_store import ConversationStore
+from pose_briefing import PoseBriefingStore
 from qr_booking import decode_booking_from_images
 from rate_limiter import FriendRequestRateLimiter
 
@@ -938,6 +939,23 @@ class StudioBrain:
 
         # 客户本来就在官网约好了：直接确认，绝不重复下单
         if booking_hit:
+            # 若客户在锁档后发来拍前动作/Pose/道具/参考图，自动沉淀到拍前动作清单供摄影师手机查看
+            pose_hint_re = re.compile(r"(动作|pose|姿势|机位|道具|氛围|逆光|避雷|不拍|参考图|想拍)", re.IGNORECASE)
+            if pose_hint_re.search(msg.text or "") or (msg.images and len(msg.images) > 0):
+                try:
+                    PoseBriefingStore().upsert_sheet(
+                        booking_id=int(booking_hit["id"]),
+                        cn=str(booking_hit.get("cn") or slots.get("cn") or ""),
+                        character=str(booking_hit.get("character") or slots.get("character") or ""),
+                        event_name=str(booking_hit.get("event_name") or slots.get("event_name") or ""),
+                        date=str(booking_hit.get("date") or slots.get("date") or ""),
+                        time_slot=str(booking_hit.get("time") or slots.get("time") or ""),
+                        poses=[msg.text.strip()] if (msg.text or "").strip() else [],
+                        reference_images=[str(x) for x in (msg.images or []) if str(x).strip()],
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("记录拍前动作清单失败: %s", exc)
+
             confirm = [
                 "ok收到",
                 f"{booking_hit.get('date') or ''} {booking_hit.get('event_name') or ''}".strip(),
@@ -1020,7 +1038,8 @@ class StudioBrain:
             f"• 角色：{slots['character']}\n"
             f"• 活动：{slots['event_name']}\n"
             f"• 时间：{slots['date']} {slots['time']}\n"
-            "📸 下方是你的专属【场记二维码】，漫展见面开拍前请出示给摄影师先拍 1 张，系统会自动归档并推送你的专属选图链接！"
+            "📸 下方是你的专属【场记二维码】，现场**开拍前**与**拍完后**请各出示给摄影师拍 1 张，系统会自动闭合归组并推送你的专属选图链接！\n"
+            "✨ 拍前可以把你**想拍的动作 / Pose / 参考图 / 携带道具**直接发我，会自动汇总到摄影师手机方便现场照着拍。"
         )
 
         if adapter is not None:

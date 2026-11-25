@@ -31,6 +31,7 @@ if str(ENGINE_DIR) not in sys.path:
 load_dotenv(WORKSPACE_ROOT / ".env", override=False)
 
 from gemini_colorist import GeminiColorist  # noqa: E402
+from mcp_planner import Local8BMCPPlanner  # noqa: E402
 from ps_bridge import PSUXPBridgeClient, apply_local_inpaint_patch, generate_local_inpaint_patch  # noqa: E402
 from revision_engine import RevisionEngine, RevisionRequest  # noqa: E402
 from xmp_raw_stage import convert_raw_with_xmp_to_tiff, resolve_preset_entry  # noqa: E402
@@ -55,6 +56,8 @@ class RetouchWorker:
         ps_bridge: Optional[PSUXPBridgeClient] = None,
         image_gen_api_url: Optional[str] = None,
         image_gen_api_key: Optional[str] = None,
+        mcp_planner: Optional[Local8BMCPPlanner] = None,
+        use_mcp_planner: Optional[bool] = None,
     ):
         self.booking_api_url = (
             booking_api_url or os.getenv("BOOKING_API_URL") or "http://127.0.0.1:3000"
@@ -84,6 +87,13 @@ class RetouchWorker:
         self.ps_bridge = ps_bridge or PSUXPBridgeClient()
         self.image_gen_api_url = image_gen_api_url
         self.image_gen_api_key = image_gen_api_key
+        env_mcp = str(os.getenv("RETOUCH_USE_MCP_PLANNER", "false")).strip().lower()
+        self.use_mcp_planner = (
+            bool(use_mcp_planner)
+            if use_mcp_planner is not None
+            else (mcp_planner is not None or env_mcp in ("1", "true", "yes", "on"))
+        )
+        self.mcp_planner = mcp_planner or (Local8BMCPPlanner() if self.use_mcp_planner else None)
 
         # 传输模式：
         #   局域网模式（默认）—— worker 与 booking-site 在同一台机器，走 /api/internal/*
@@ -312,22 +322,39 @@ class RetouchWorker:
                     "action_set": preset_entry["ps_action_set"],
                     "action_name": preset_entry["ps_action_name"],
                 }
-            retouch_kwargs: Dict[str, Any] = {
-                "tiff_path": tiff_path,
-                "plan": plan,
-                "out_psd": psd_output_path,
-                "out_preview_jpg": final_output_path,
-                "ps_action": ps_action,
-            }
-            if inpaint_patch_path is not None and inpaint_box_px is not None:
-                retouch_kwargs["inpaint_patch_path"] = inpaint_patch_path
-                retouch_kwargs["inpaint_box_px"] = inpaint_box_px
-            ps_export = self.ps_bridge.apply_retouch_and_export_psd(**retouch_kwargs)
-            logger.info(
-                "PS 已另存 PSD 并导出 JPG: %s / %s",
-                psd_output_path.name,
-                final_output_path.name,
-            )
+            if self.use_mcp_planner and self.mcp_planner is not None:
+                ps_export = self.mcp_planner.execute_retouch_session(
+                    source_path=tiff_path,
+                    high_level_plan=plan,
+                    out_psd_path=psd_output_path,
+                    out_preview_jpg=final_output_path,
+                    brief_text=str(plan.get("summary") or ""),
+                    ps_action=ps_action,
+                )
+                logger.info(
+                    "已通过 8B+MCP (%s / %s) 另存 PSD 并导出 JPG: %s / %s",
+                    ps_export.get("backend", "com"),
+                    ps_export.get("planner_mode", ""),
+                    psd_output_path.name,
+                    final_output_path.name,
+                )
+            else:
+                retouch_kwargs: Dict[str, Any] = {
+                    "tiff_path": tiff_path,
+                    "plan": plan,
+                    "out_psd": psd_output_path,
+                    "out_preview_jpg": final_output_path,
+                    "ps_action": ps_action,
+                }
+                if inpaint_patch_path is not None and inpaint_box_px is not None:
+                    retouch_kwargs["inpaint_patch_path"] = inpaint_patch_path
+                    retouch_kwargs["inpaint_box_px"] = inpaint_box_px
+                ps_export = self.ps_bridge.apply_retouch_and_export_psd(**retouch_kwargs)
+                logger.info(
+                    "PS 已另存 PSD 并导出 JPG: %s / %s",
+                    psd_output_path.name,
+                    final_output_path.name,
+                )
 
             # 6b. 若为 UXP 队列模式且需要局部生图，回退为对导出 JPG 打羽化补丁
             if plan.get("needs_local_inpaint") and plan.get("inpaint_region") and not inpaint_info.get("applied"):

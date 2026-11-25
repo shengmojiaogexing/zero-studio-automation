@@ -114,7 +114,33 @@ class TestPSMCPAndDualModel(unittest.TestCase):
             "ps_close_document",
         ])
 
-        # 2) 本地 8B 关闭时自动降级为确定性 MCP 编译
+        # 2) 模拟本地 8B -> mikechambers/adb-mcp 完整路由
+        adb_cmds = []
+        mock_adb = AdbMCPPhotoshopClient(mock_send_fn=lambda cmd: (adb_cmds.append(cmd) or {"status": "SUCCESS", "layers": [{"id": 3}]}))
+        planner_adb = Local8BMCPPlanner(
+            adb_client=mock_adb,
+            ps_mcp_backend="adb_mcp",
+            mock_llm_fn=lambda ctx: [
+                {"name": "ps_add_exposure_layer", "arguments": {"exposure_delta": 0.25}},
+                {"name": "ps_add_color_balance_layer", "arguments": {"temp_delta": -4.0, "tint_delta": 1.0}},
+            ],
+        )
+        res_adb = planner_adb.execute_retouch_session(
+            source_path=Path("E:/work/in.tiff"),
+            high_level_plan=sample_plan,
+            out_psd_path=Path("E:/work/out.psd"),
+            out_preview_jpg=None,
+        )
+        self.assertEqual(res_adb["backend"], "adb_mcp")
+        self.assertEqual([c["action"] for c in adb_cmds], [
+            "openPhotoshopFile",
+            "getLayers",
+            "addBrightnessContrastAdjustmentLayer",
+            "addColorBalanceAdjustmentLayer",
+            "saveDocumentAs",
+        ])
+
+        # 3) 本地 8B 关闭时自动降级为确定性 MCP 编译
         calls = compile_plan_to_mcp_calls(sample_plan)
         self.assertEqual([c["name"] for c in calls], [
             "ps_add_exposure_layer",
