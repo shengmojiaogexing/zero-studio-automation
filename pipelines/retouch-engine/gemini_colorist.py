@@ -210,15 +210,21 @@ def _strip_code_fence(text: str) -> str:
     return t.strip()
 
 
-def load_retouch_skills(skills_dir: Optional[Path] = None) -> Tuple[str, List[str]]:
-    """热加载 configs/retouch_skills/*.md 下的全部规则文档，无需重启或改代码。"""
+def load_retouch_skills(
+    skills_dir: Optional[Path] = None,
+    selected_skills: Optional[List[str]] = None,
+) -> Tuple[str, List[str]]:
+    """热加载 configs/retouch_skills/*.md 下的规则文档；支持传入 selected_skills 仅加载勾选的 Skill。"""
     sdir = Path(skills_dir or DEFAULT_SKILLS_DIR)
     if not sdir.exists():
         return "", []
     md_files = sorted(sdir.glob("*.md"), key=lambda p: p.name.lower())
+    allow_set = {str(x).strip().lower() for x in selected_skills if str(x).strip()} if selected_skills is not None else None
     chunks: List[str] = []
     loaded_names: List[str] = []
     for f in md_files:
+        if allow_set is not None and f.name.lower() not in allow_set:
+            continue
         try:
             content = f.read_text(encoding="utf-8").strip()
             if content:
@@ -486,9 +492,10 @@ class GeminiColorist:
         character: str = "",
         event_name: str = "",
         reference_image_path: Optional[Path] = None,
+        selected_skills: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """输入纯画面 1024px sRGB 预览图 + 可选参考图 + 热加载 Skill 规则，输出安全钳位后的 JSON 方案。"""
-        skills_text, loaded_skills = load_retouch_skills(self.skills_dir)
+        """输入纯画面 1024px sRGB 预览图 + 可选参考图 + 勾选的 Skill 规则，输出安全钳位后的 JSON 方案。"""
+        skills_text, loaded_skills = load_retouch_skills(self.skills_dir, selected_skills=selected_skills)
 
         context = {
             "srgb_preview_path": str(srgb_preview_path),
@@ -530,6 +537,129 @@ class GeminiColorist:
         if safe_plan["clamped_fields"]:
             logger.warning("Gemini 方案存在越界参数，已安全钳位: %s", safe_plan["clamped_fields"])
         return safe_plan
+
+    # ==================== 终盘视觉整体检验 + 逆推回退裁判 ====================
+
+    def review_final_retouch(
+        self,
+        original_preview_path: Path,
+        final_preview_path: Path,
+        checkpoints: List[Dict[str, Any]],
+        selected_skills: Optional[List[str]] = None,
+        reference_image_path: Optional[Path] = None,
+        preset_notes: str = "",
+    ) -> Dict[str, Any]:
+        """
+        保存完最终成片后，由视觉大模型对照「原图 + 最终成片 (+ 参考图) + 检查点清单」进行整体质量检验：
+        - 合格返回 passed=True, score(0~100), summary;
+        - 不合格返回 passed=False, root_cause, rollback_to_checkpoint, fix_calls (标准 PS MCP 工具调用列表)。
+        """
+        skills_text, _ = load_retouch_skills(self.skills_dir, selected_skills=selected_skills)
+        ckpt_brief = [
+            {
+                "id": c.get("id"),
+                "step_end": c.get("step_end"),
+                "tools": [s.get("tool") for s in (c.get("steps") or [])],
+            }
+            for c in (checkpoints or [])
+        ]
+
+        prompt = (
+            f"{skills_text}\n\n"
+            f"=== 终盘成品质量整体检验任务 ===\n"
+            f"- 额外风格要求：{preset_notes or '按所选 Skill 标准验收'}\n"
+            f"- 第一张图是修前原图预览；第二张图是 Photoshop 最终保存的成片预览；"
+            f"{'第三张图是目标仿色参考图。' if reference_image_path and Path(reference_image_path).exists() else '无额外参考图。'}\n"
+            f"- 检查点时间线：{json.dumps(ckpt_brief, ensure_ascii=False)}\n\n"
+            "请从【主体曝光与通透感、背景压暗去杂色、肤色白皙自然度、高光是否过曝、暗部是否发灰】五个维度打分并审查。\n"
+            "严格仅输出一个合法 JSON 对象：\n"
+            "{\n"
+            '  "passed": true,\n'
+            '  "score": 88,\n'
+            '  "summary": "中文检验评语（<=100字）",\n'
+            '  "root_cause": "若 passed=false，说明哪一步出了问题；通过则为空字符串",\n'
+            '  "rollback_to_checkpoint": "若需回退，填写检查点 id（如 ckpt_01 或 source）；通过则为空字符串",\n'
+            '  "fix_calls": [\n'
+            '    {"name": "ps_add_exposure_layer", "arguments": {"exposure_delta": 0.2, "layer_name": "ZS_Fix_Exp"}}\n'
+            "  ]\n"
+            "}\n"
+            "注意：只有当画面存在明显缺陷（score < 78）时才将 passed 设为 false 并给出克制的 fix_calls；"
+            "若已达到商业交付基线（score >= 78）请设为 passed=true 且 fix_calls=[]。"
+        )
+
+        if self.mock_fn is not None:
+            return self.mock_fn({"mode": "review", "checkpoints": ckpt_brief, "prompt": prompt})
+
+        if not self.api_key:
+            return {
+                "passed": True,
+                "score": 80,
+                "summary": "未配置云端视觉 API Key，跳过 AI 终盘视觉打分，直接交由人工终审。",
+                "root_cause": "",
+                "rollback_to_checkpoint": "",
+                "fix_calls": [],
+            }
+
+        try:
+            if self.base_url:
+                content: List[Dict[str, Any]] = [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": self._data_url(Path(original_preview_path))}},
+                    {"type": "image_url", "image_url": {"url": self._data_url(Path(final_preview_path))}},
+                ]
+                if reference_image_path and Path(reference_image_path).exists():
+                    content.append({"type": "image_url", "image_url": {"url": self._data_url(Path(reference_image_path))}})
+                body = {
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": content}],
+                    "temperature": 0.15,
+                    "max_tokens": 1200,
+                }
+                with httpx.Client(timeout=self.timeout) as client:
+                    resp = client.post(
+                        f"{self.base_url}/chat/completions",
+                        headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                        json=body,
+                    )
+                    resp.raise_for_status()
+                    text_out = str((resp.json().get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
+                parsed = json.loads(_strip_code_fence(text_out))
+            else:
+                parts: List[Dict[str, Any]] = [
+                    {"text": prompt},
+                    _encode_image_part(Path(original_preview_path)),
+                    _encode_image_part(Path(final_preview_path)),
+                ]
+                if reference_image_path and Path(reference_image_path).exists():
+                    parts.append(_encode_image_part(Path(reference_image_path)))
+                endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+                with httpx.Client(timeout=self.timeout) as client:
+                    resp = client.post(
+                        endpoint,
+                        json={"contents": [{"role": "user", "parts": parts}], "generationConfig": {"temperature": 0.15, "responseMimeType": "application/json"}},
+                    )
+                    resp.raise_for_status()
+                    text_out = str(resp.json()["candidates"][0]["content"]["parts"][0]["text"]).strip()
+                parsed = json.loads(_strip_code_fence(text_out))
+
+            return {
+                "passed": bool(parsed.get("passed", True)),
+                "score": int(parsed.get("score", 82)),
+                "summary": str(parsed.get("summary") or "AI 终盘检验完成").strip()[:160],
+                "root_cause": str(parsed.get("root_cause") or "").strip(),
+                "rollback_to_checkpoint": str(parsed.get("rollback_to_checkpoint") or "").strip(),
+                "fix_calls": parsed.get("fix_calls") if isinstance(parsed.get("fix_calls"), list) else [],
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("AI 终盘视觉检验调用异常，放行交由人工终审: %s", exc)
+            return {
+                "passed": True,
+                "score": 0,
+                "summary": f"AI 终盘检验异常（{exc}），已保留分层 PSD 交由人工终审",
+                "root_cause": "",
+                "rollback_to_checkpoint": "",
+                "fix_calls": [],
+            }
 
     # ==================== 反馈修订（看图 + 用户意见 -> 增量修改） ====================
 
