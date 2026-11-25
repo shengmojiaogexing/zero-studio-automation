@@ -49,7 +49,41 @@ class TestPSMCPAndDualModel(unittest.TestCase):
         # 验证标准 FastMCP Server 可正常构建
         server = create_fastmcp_server(dry_run=True)
         self.assertIsNotNone(server)
-        self.assertGreaterEqual(len(PSMCPToolkit.get_openai_tool_schemas()), 6)
+        self.assertGreaterEqual(len(PSMCPToolkit.get_openai_tool_schemas()), 20)
+
+    def test_advanced_retouch_tools_universal_engines_and_visual_check(self):
+        kit = PSMCPToolkit(dry_run=True)
+        # 1) 高频精修原子工具全覆盖
+        self.assertEqual(kit.ps_create_neutral_gray_layer()["status"], "ok")
+        self.assertEqual(kit.ps_create_frequency_separation(gaussian_radius=8.0)["status"], "ok")
+        self.assertEqual(kit.ps_add_levels_layer(black_point=8, gamma=1.08, white_point=248)["status"], "ok")
+        self.assertEqual(kit.ps_select_color_range(preset="skinTones", fuzziness=35)["status"], "ok")
+        self.assertEqual(kit.ps_modify_selection(feather_px=6.0, contract_px=2, invert=False)["status"], "ok")
+        self.assertEqual(kit.ps_add_layer_mask_from_selection(invert=False)["status"], "ok")
+        self.assertEqual(kit.ps_set_layer_blend_opacity(blend_mode="softlight", opacity=75.0)["status"], "ok")
+        self.assertEqual(kit.ps_convert_to_smart_object()["status"], "ok")
+        self.assertEqual(kit.ps_apply_high_pass_sharpen(radius=1.8, opacity=55.0)["status"], "ok")
+        self.assertEqual(kit.ps_select_subject()["status"], "ok")
+        kit.ps_apply_liquify(face_slim=120, eye_size=-99, jawline=80)
+        self.assertEqual(kit.call_history[-1]["args"]["face_slim"], 40)
+        self.assertEqual(kit.call_history[-1]["args"]["eye_size"], -30)
+
+        # 2) 万能引擎 ①：ExtendScript 安全审查（合法通过，危险调用拦截）
+        ok_jsx = kit.ps_execute_extendscript("var n = app.activeDocument.name; return n;")
+        self.assertEqual(ok_jsx["status"], "ok")
+        with self.assertRaises(ValueError):
+            kit.ps_execute_extendscript("app.system('calc.exe'); app.activeDocument.close();")
+
+        # 3) 万能引擎 ②：batchPlay 描述符校验与执行
+        bp_res = kit.ps_execute_batchplay([{"_obj": "select", "_target": [{"_ref": "layer", "_enum": "ordinal", "_value": "targetEnum"}]}])
+        self.assertEqual(bp_res["status"], "ok")
+        with self.assertRaises(ValueError):
+            kit.ps_execute_batchplay([{"missing_obj": True}])
+
+        # 4) 视觉自检闭环
+        prev = kit.ps_get_canvas_preview(max_edge=768, return_base64=False)
+        self.assertEqual(prev["status"], "ok")
+        self.assertIn("mean_luma", prev["metrics"])
 
     def test_adb_mcp_client_protocol_and_clamping(self):
         received = []

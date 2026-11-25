@@ -45,7 +45,21 @@ ALLOWED_PLANNER_TOOLS = {
     "ps_add_curves_layer",
     "ps_add_hsl_layer",
     "ps_add_selective_color_layer",
+    "ps_add_levels_layer",
+    "ps_create_neutral_gray_layer",
+    "ps_create_frequency_separation",
+    "ps_select_color_range",
+    "ps_modify_selection",
+    "ps_add_layer_mask_from_selection",
+    "ps_set_layer_blend_opacity",
+    "ps_convert_to_smart_object",
+    "ps_apply_high_pass_sharpen",
+    "ps_select_subject",
+    "ps_apply_liquify",
     "ps_run_action",
+    "ps_execute_extendscript",
+    "ps_execute_batchplay",
+    "ps_get_canvas_preview",
 }
 
 LOCAL_8B_PLANNER_SYSTEM_PROMPT = """你是 ZERO STUDIO 的本地 Photoshop MCP 执行拆解器（8B 工具调用模型）。
