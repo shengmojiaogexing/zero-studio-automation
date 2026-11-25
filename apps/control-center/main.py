@@ -162,9 +162,9 @@ SETTINGS_GROUPS_SCHEMA: List[Dict[str, Any]] = [
         "test_action": "test-tunnel",
         "test_label": "测试外网 8080/8081 入口",
         "fields": [
-            {"key": "PUBLIC_BASE_URL", "label": "客户外网选图根地址", "default": "http://156.238.228.39:8080", "desc": "自动拼装 /gallery/{token} 与 /delivery/{token} 链接"},
-            {"key": "VPS_HOST", "label": "公网 VPS IP / 域名", "default": "156.238.228.39", "desc": "部署了 frps 的公网节点地址"},
-            {"key": "VPS_SSH_PORT", "label": "VPS SSH 端口", "default": "24877", "desc": "部署脚本连接 VPS 使用的 SSH 端口"},
+            {"key": "PUBLIC_BASE_URL", "label": "客户外网选图根地址", "default": "http://your-vps-ip-or-domain:8080", "desc": "自动拼装 /gallery/{token} 与 /delivery/{token} 链接"},
+            {"key": "VPS_HOST", "label": "公网 VPS IP / 域名", "default": "", "desc": "部署了 frps 的公网节点地址"},
+            {"key": "VPS_SSH_PORT", "label": "VPS SSH 端口", "default": "22", "desc": "部署脚本连接 VPS 使用的 SSH 端口"},
             {"key": "VPS_SSH_USER", "label": "VPS SSH 用户名", "default": "root", "desc": "部署脚本使用的 SSH 登录用户"},
             {"key": "FRP_BIND_PORT", "label": "FRP 服务端绑定端口", "default": "7000", "desc": "frps 监听的 TCP/UDP 穿透端口"},
             {"key": "FRP_TOKEN", "label": "FRP 鉴权 Token", "default": "", "desc": "本地 frpc 与远端 frps 一致的强密钥"},

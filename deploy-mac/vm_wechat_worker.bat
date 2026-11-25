@@ -11,7 +11,7 @@ echo.
 
 REM ---------- M1 Mac 宿主机 ----------
 REM UTM 虚拟机的网关地址就是 Mac 侧网卡（192.168.64.1），
-REM 虚拟机访问不到 Mac 的局域网 IP（192.168.2.148），必须用这个。
+REM 虚拟机访问不到 Mac 的局域网 IP（例如 192.168.x.x），必须用这个。
 set "MAC_HOST=192.168.64.1"
 set "BOOKING_API_URL=http://%MAC_HOST%:3000"
 REM INTERNAL_API_KEY 从根目录 .env 或当前环境变量读取，禁止硬编码。

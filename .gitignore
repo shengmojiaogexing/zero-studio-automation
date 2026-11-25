@@ -48,8 +48,9 @@ work/
 *.log
 *.pid
 
-# NapCat/QQ 客户端、账号配置、聊天名单与缓存
+# NapCat/QQ 客户端、账号配置、聊天名单与缓存、第三方 adb-mcp 克隆目录
 infra/napcat/
+infra/adb-mcp/
 configs/im_rules.json
 
 # 测试生成的二维码与临时调试产物

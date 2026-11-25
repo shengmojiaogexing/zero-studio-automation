@@ -32,7 +32,7 @@ from main import create_app  # noqa: E402
 
 BOOKING_PORT = 3465
 BOOKING_URL = f"http://127.0.0.1:{BOOKING_PORT}"
-PUBLIC_BASE = "http://156.238.228.39:8080"
+PUBLIC_BASE = "http://203.0.113.10:8080"
 INTERNAL_KEY = "sprint5-internal-secret-9999"
 ADMIN_USER = "admin"
 ADMIN_PASS = "StrongStudioPass#2026"
@@ -99,7 +99,7 @@ async def run_tests() -> None:
                     f"FRP_TOKEN={secret_frp}",
                     f"PUBLIC_BASE_URL={PUBLIC_BASE}",
                     f"BOOKING_API_URL={BOOKING_URL}",
-                    "VPS_HOST=156.238.228.39",
+                    "VPS_HOST=203.0.113.10",
                     "FRP_PUBLIC_BOOKING_PORT=8080",
                     "FRP_PUBLIC_STUDIO_PORT=8081",
                     f"NAS_DRIVE_PATH={tmp_root}",
@@ -136,7 +136,7 @@ async def run_tests() -> None:
                 # 校验外网 Host 访问 booking-site /api/internal/* 必须被拒绝 (403)
                 r_ext_block = bclient.get(
                     f"{BOOKING_URL}/api/internal/bookings/by-event?event_name=CP31",
-                    headers={"X-API-Key": INTERNAL_KEY, "Host": "156.238.228.39:8080"},
+                    headers={"X-API-Key": INTERNAL_KEY, "Host": "203.0.113.10:8080"},
                 )
                 assert r_ext_block.status_code == 403, f"外网 Host 访问 /api/internal/* 应被拦截 403，实际 {r_ext_block.status_code}"
 
@@ -149,7 +149,7 @@ async def run_tests() -> None:
                     "ADMIN_PASSWORD": ADMIN_PASS,
                     "INTERNAL_API_KEY": INTERNAL_KEY,
                     "PUBLIC_BASE_URL": PUBLIC_BASE,
-                    "VPS_HOST": "156.238.228.39",
+                    "VPS_HOST": "203.0.113.10",
                     "FRP_PUBLIC_BOOKING_PORT": "8080",
                     "FRP_PUBLIC_STUDIO_PORT": "8081",
                     "NAS_UNC_PATH": "",
@@ -192,7 +192,7 @@ async def run_tests() -> None:
                 assert hdata["nas"]["online"] is True and hdata["nas"]["free_gb"] > 0
                 assert "gpu" in hdata
                 assert hdata["tunnel"]["public_booking_url"] == PUBLIC_BASE
-                assert hdata["tunnel"]["public_studio_url"] == "http://156.238.228.39:8081"
+                assert hdata["tunnel"]["public_studio_url"] == "http://203.0.113.10:8081"
                 print("[PASS] (b) 健康聚合接口通过（返回微服务、NAS容量、GPU 及公网 VPS 隧道状态）")
 
                 # ---------- (c) 订单看板、场记二维码透传与 PUBLIC_BASE_URL 外网链接 ----------
@@ -245,7 +245,7 @@ async def run_tests() -> None:
                     "/api/settings/env",
                     json={
                         "updates": {
-                            "PUBLIC_BASE_URL": "http://156.238.228.39:8080",
+                            "PUBLIC_BASE_URL": "http://203.0.113.10:8080",
                             "DEEPSEEK_API_KEY": items_map["DEEPSEEK_API_KEY"],
                         }
                     },

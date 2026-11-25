@@ -41,8 +41,8 @@ function Get-ConfigValue($map, [string]$key, [string]$defaultVal = "") {
 }
 
 $envMap = Load-DotEnv $EnvFile
-$VpsHost = Get-ConfigValue $envMap "VPS_HOST" "156.238.228.39"
-$VpsPort = Get-ConfigValue $envMap "VPS_SSH_PORT" "24877"
+$VpsHost = Get-ConfigValue $envMap "VPS_HOST" ""
+$VpsPort = Get-ConfigValue $envMap "VPS_SSH_PORT" "22"
 $VpsUser = Get-ConfigValue $envMap "VPS_SSH_USER" "root"
 $FrpBindPort = Get-ConfigValue $envMap "FRP_BIND_PORT" "7000"
 $FrpToken = Get-ConfigValue $envMap "FRP_TOKEN" ""

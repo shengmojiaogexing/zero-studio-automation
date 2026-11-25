@@ -45,7 +45,7 @@ class WorkerSyncClient:
         verify_tls: bool = True,
     ):
         """
-        base_url: 主站地址，例如 http://156.238.228.39:8083
+        base_url: 主站地址，例如 http://your-vps-ip:8083
         token:    WORKER_SYNC_TOKEN（与服务端 .env 一致）
         """
         if not token:
@@ -243,7 +243,7 @@ def build_sync_client_from_env(env: Optional[Dict[str, str]] = None) -> WorkerSy
     e = env or os.environ
     base_url = (
         e.get("WORKER_SYNC_URL")
-        or f"http://{e.get('VPS_HOST', '156.238.228.39')}:{e.get('FRP_WORKER_PORT', '8083')}"
+        or f"http://{e.get('VPS_HOST', 'your-vps-ip')}:{e.get('FRP_WORKER_PORT', '8083')}"
     )
     return WorkerSyncClient(
         base_url=base_url,

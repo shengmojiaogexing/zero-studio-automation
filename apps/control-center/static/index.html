@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZERO STUDIO · CN.庄泽 / 零柒 摄影工作室中控台</title>
+    <title>ZERO STUDIO · 摄影工作室智能中控台</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
@@ -91,7 +91,7 @@
                 <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#6fa8a5] to-[#3d6b69] flex items-center justify-center text-[#0b0d12] font-black text-base shadow-lg shadow-[#6fa8a5]/20">ZS</div>
                 <div class="min-w-0">
                     <div class="text-sm font-bold tracking-wide text-white truncate">ZERO STUDIO</div>
-                    <div class="text-[11px] text-gray-400 truncate">CN.庄泽 / 零柒 · 工作室</div>
+                    <div class="text-[11px] text-gray-400 truncate">ZERO STUDIO · 商业摄影自动化工作台</div>
                 </div>
             </div>
 
@@ -164,7 +164,7 @@
             </div>
             <div class="flex items-center gap-2 text-xs">
                 <button onclick="copyPublicBookingUrl()" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 font-medium transition">复制客户预约链接</button>
-                <a id="openPublicSiteBtn" href="http://156.238.228.39:8080" target="_blank" class="px-3 py-1.5 rounded-lg bg-[#6fa8a5]/15 hover:bg-[#6fa8a5]/25 border border-[#6fa8a5]/30 text-[#84c5c1] font-semibold transition">打开客户官网 ↗</a>
+                <a id="openPublicSiteBtn" href="/" target="_blank" class="px-3 py-1.5 rounded-lg bg-[#6fa8a5]/15 hover:bg-[#6fa8a5]/25 border border-[#6fa8a5]/30 text-[#84c5c1] font-semibold transition">打开客户官网 ↗</a>
             </div>
         </div>
 
@@ -324,7 +324,7 @@
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <div>
                                 <div class="text-sm font-bold text-white">AI 自动聊天人设与接单话术（系统提示词）</div>
-                                <div class="text-[11px] text-gray-400 mt-0.5">已内置 CN.庄泽 / 零柒 的完整价目、互勉 IP、婉拒规则、档期与器材清单</div>
+                                <div class="text-[11px] text-gray-400 mt-0.5">支持自定义工作室价目、档期、接单人设、婉拒规则与器材说明（热加载即时生效）</div>
                             </div>
                             <button onclick="saveImConfig()" class="px-5 py-2.5 rounded-xl bg-[#6fa8a5] hover:bg-[#7fbab7] text-[#0b0d12] text-xs font-bold transition shadow-lg shadow-[#6fa8a5]/15">保存全部规则并生效</button>
                         </div>
@@ -1094,7 +1094,7 @@
             REVIEW_PENDING: ['待终审', 'bg-orange-500/20 text-orange-300'],
             DELIVERED: ['已交付', 'bg-emerald-500/15 text-emerald-300'],
         };
-        let allBookings = [], orderFilter = 'ALL', activeOrder = null, publicBookingUrl = 'http://156.238.228.39:8080';
+        let allBookings = [], orderFilter = 'ALL', activeOrder = null, publicBookingUrl = '';
         let imRules = {}, wxRunning = false, presetsCache = { presets: {} }, activeSkill = '', jobTimer = null;
 
         function toast(msg, type = 'ok') {

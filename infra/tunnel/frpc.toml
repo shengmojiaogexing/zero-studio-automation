@@ -5,7 +5,7 @@
 #           im-gateway 与 booking-site /api/internal/* 严禁配置穿透，仅限 127.0.0.1 访问！
 # ==============================================================================
 
-serverAddr = "156.238.228.39"
+serverAddr = "{{ .Envs.VPS_HOST }}"
 serverPort = 7000
 
 [auth]
@@ -15,7 +15,7 @@ token = "{{ .Envs.FRP_TOKEN }}"
 [transport]
 tls.enable = true
 
-# 隧道 1：客户外网选图与成片交付入口 (http://156.238.228.39:8080)
+# 隧道 1：客户外网选图与成片交付入口 (http://<VPS_HOST>:8080)
 [[proxies]]
 name = "booking-public"
 type = "tcp"
@@ -23,7 +23,7 @@ localIP = "127.0.0.1"
 localPort = 3000
 remotePort = 8080
 
-# 隧道 2：手机/平板外网登录统一中控台 (http://156.238.228.39:8081)
+# 隧道 2：手机/平板外网登录统一中控台 (http://<VPS_HOST>:8081)
 [[proxies]]
 name = "studio-public"
 type = "tcp"

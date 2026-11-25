@@ -285,7 +285,7 @@ class PSUXPBridgeClient:
                     raise RuntimeError(
                         "等待 Photoshop 执行超时。请确认：\n"
                         "  1) Photoshop 已打开\n"
-                        "  2) ZHUANG-AI 面板已加载（插件会自动轮询）\n"
+                        "  2) Photoshop UXP / MCP 插件面板已加载并已连接\n"
                         f"  服务端返回：{message}"
                     )
 

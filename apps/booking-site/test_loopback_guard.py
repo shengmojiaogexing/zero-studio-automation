@@ -81,7 +81,7 @@ def main() -> int:
             # 2) 伪造 Host 但来源不是回环 —— 模拟从隧道进来的外部请求
             #    直接构造 socket 并用非回环源地址不可行，这里改为验证「Host 非回环」被拒
             r2 = c.get(f"{base}/api/internal/retouch/pending",
-                       headers={"X-API-Key": KEY, "Host": "156.238.228.39:8080"})
+                       headers={"X-API-Key": KEY, "Host": "203.0.113.10:8080"})
             check("非回环 Host 被拒 (403)", r2.status_code == 403, f"status={r2.status_code}")
 
             # 3) 带 X-Forwarded-For 一律拒绝（反代绕过）

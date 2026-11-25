@@ -1,6 +1,6 @@
 ﻿param(
-    [string]$MacHost = "192.168.2.148",
-    [string]$MacUser = "zero",
+    [string]$MacHost = "192.168.1.10",
+    [string]$MacUser = "your-mac-user",
     [string]$RemoteRoot = "~/zero-studio-automation"
 )
 

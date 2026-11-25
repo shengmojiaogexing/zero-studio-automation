@@ -1,5 +1,5 @@
 /**
- * ZERO STUDIO · Photoshop UXP Bridge 本地接收端模板（可直接集成至 ZHUANG-AI UXP 插件）
+ * ZERO STUDIO · Photoshop UXP Bridge 本地接收端模板（可集成至自定义 UXP 插件）
  *
  * 职责：
  * 1. 通过 127.0.0.1 + 共享密钥 Token (X-Bridge-Token) 接收来自 Python retouch-engine 的修图任务；
@@ -309,7 +309,7 @@ async function handleRetouchExportPSD({
 }
 
 /**
- * 统一路由分发函数（可挂接到 ZHUANG-AI UXP 现有的本地 HTTP/WS Bridge 通道）
+ * 统一路由分发函数（可挂接到本地 UXP HTTP/WS Bridge 通道）
  */
 async function dispatchBridgeRequest(route, headers, payload) {
     if (!verifyBridgeToken(headers)) {

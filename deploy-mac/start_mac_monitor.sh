@@ -90,7 +90,8 @@ fi
 echo "[4/5] 启动 control-center (:3080)..."
 (cd "$ROOT_DIR/apps/control-center" && nohup "$PY" -m uvicorn main:app --host 0.0.0.0 --port 3080 > "$ROOT_DIR/logs/mac_control_center.log" 2>&1 & echo $! > "$ROOT_DIR/logs/mac_control_center.pid")
 
-echo "[4/5] 启动 FRP 公网穿透 (156.238.228.39:8080 & :8081)..."
+VPS_DISPLAY="${VPS_HOST:-your-vps-ip}"
+echo "[4/5] 启动 FRP 公网穿透 (${VPS_DISPLAY}:8080 & :8081)..."
 (cd "$ROOT_DIR" && nohup "$FRPC_BIN" -c "$ROOT_DIR/infra/tunnel/frpc.toml" > "$ROOT_DIR/logs/mac_frpc.log" 2>&1 & echo $! > "$ROOT_DIR/logs/mac_frpc.pid")
 
 # 8. 开启 macOS 防休眠（合盖/息屏不掉线）
@@ -104,7 +105,7 @@ echo "============================================================"
 echo "  ✅ M1 Mac 监控机已全部启动！"
 echo "  • 本机中控台：http://127.0.0.1:3080"
 echo "  • 本机预约页：http://127.0.0.1:3000"
-echo "  • 公网预约页：http://156.238.228.39:8080"
-echo "  • 公网中控台：http://156.238.228.39:8081"
+echo "  • 公网预约页：http://${VPS_DISPLAY}:8080"
+echo "  • 公网中控台：http://${VPS_DISPLAY}:8081"
 echo "  • 停止服务请运行：bash deploy-mac/stop_mac_monitor.sh"
 echo "============================================================"

@@ -544,6 +544,79 @@ def post_batch_results(
     return resp.json()
 
 
+def assign_qr_segments(
+    enriched: List[Dict[str, Any]],
+    max_qr_segment_gap_sec: float = 1800.0,
+) -> Dict[str, int]:
+    """
+    场记二维码起止锚点分组状态机（支持「拍前 + 拍后双二维码闭合分组」，同时向后兼容单开始码）：
+    1. 显式标记：二维码 JSON 含 `slate_role` / `phase` 为 `start` 或 `end`：
+       - `start`：开启对应 booking_id 分组；
+       - `end`：闭合当前分组（标记 SLATE_QR_END 并清空 active_booking_id，后续试光/空拍绝不串组）。
+    2. 极简双扫（同一订单二维码拍前扫一次、拍后扫一次）：
+       - 当前已处于 booking_id=X 分组且中间已有 >=1 张非二维码成片时，再次扫到 booking_id=X，
+         自动识别为拍后结束锚点（SLATE_QR_END）并闭合分组；
+       - 若连拍多张开始二维码（中间尚无成片），保持开启状态防误关。
+    3. 兼容旧版单码：若直接扫到新订单 booking_id=Y，自动切换到 Y；超时超过 max_qr_segment_gap_sec 自动断开。
+    """
+    active_booking_id: Optional[int] = None
+    last_anchor_ts: float = 0.0
+    photos_in_active_group: int = 0
+    closed_groups = 0
+    open_groups = 0
+
+    for asset in enriched:
+        ts = float(asset.get("_ts") or 0.0)
+        qr = asset.get("_qr_payload")
+        if qr is not None:
+            bid = int(qr["booking_id"])
+            role = str(qr.get("slate_role") or qr.get("phase") or "").strip().lower()
+            asset["booking_ids"] = [bid]
+            asset["cluster_id"] = f"qr_booking_{bid}"
+
+            is_explicit_end = role in ("end", "stop", "close")
+            is_explicit_start = role in ("start", "begin", "open")
+            is_implicit_end = (
+                not is_explicit_start
+                and active_booking_id == bid
+                and photos_in_active_group > 0
+            )
+
+            if is_explicit_end or is_implicit_end:
+                asset["reject_reason"] = "SLATE_QR_END"
+                if active_booking_id == bid or is_explicit_end:
+                    active_booking_id = None
+                    last_anchor_ts = 0.0
+                    photos_in_active_group = 0
+                    closed_groups += 1
+            else:
+                asset["reject_reason"] = "SLATE_QR_START" if is_explicit_start else "SLATE_QR"
+                if active_booking_id != bid:
+                    open_groups += 1
+                    photos_in_active_group = 0
+                active_booking_id = bid
+                last_anchor_ts = ts
+            continue
+
+        if active_booking_id is not None:
+            within_gap = (
+                last_anchor_ts <= 0
+                or ts <= 0
+                or (ts - last_anchor_ts) <= max_qr_segment_gap_sec
+            )
+            if within_gap:
+                asset["booking_ids"] = [active_booking_id]
+                asset["cluster_id"] = f"qr_booking_{active_booking_id}"
+                photos_in_active_group += 1
+                if ts > 0:
+                    last_anchor_ts = ts
+            else:
+                active_booking_id = None
+                photos_in_active_group = 0
+
+    return {"opened_groups": open_groups, "closed_groups": closed_groups}
+
+
 # ==================== 主流程：废片预筛 -> 二维码切段 -> 多模态聚类 -> 回写 ====================
 
 def process_batch_manifest(
@@ -637,32 +710,14 @@ def process_batch_manifest(
             asset["_costume_vec"] = costume_extractor.extract(img_bgr)
             asset["_faces"] = face_extractor.extract_faces(img_bgr)
 
-    # 2) 按场记二维码时间顺序切段并直接绑定到对应 booking_id
-    active_booking_id: Optional[int] = None
-    last_anchor_ts: float = 0.0
-
-    for asset in enriched:
-        ts = asset["_ts"]
-        if asset["_qr_payload"] is not None:
-            active_booking_id = int(asset["_qr_payload"]["booking_id"])
-            last_anchor_ts = ts
-            asset["booking_ids"] = [active_booking_id]
-            asset["cluster_id"] = f"qr_booking_{active_booking_id}"
-            continue
-
-        if active_booking_id is not None:
-            within_gap = (
-                last_anchor_ts <= 0
-                or ts <= 0
-                or (ts - last_anchor_ts) <= max_qr_segment_gap_sec
-            )
-            if within_gap:
-                asset["booking_ids"] = [active_booking_id]
-                asset["cluster_id"] = f"qr_booking_{active_booking_id}"
-                if ts > 0:
-                    last_anchor_ts = ts
-            else:
-                active_booking_id = None
+    # 2) 按场记二维码起止锚点切段并直接绑定到对应 booking_id（支持拍前+拍后双二维码闭合分组）
+    qr_stats = assign_qr_segments(enriched, max_qr_segment_gap_sec=max_qr_segment_gap_sec)
+    if qr_stats["opened_groups"] or qr_stats["closed_groups"]:
+        logger.info(
+            "场记二维码分组统计: 开启=%d 组, 拍后闭合=%d 组",
+            qr_stats["opened_groups"],
+            qr_stats["closed_groups"],
+        )
 
     # 3) 构建已知角色原型库（来自二维码已锚定有效图 + 预约单 character_ref_img）
     booking_costume_protos: Dict[int, List[np.ndarray]] = {}

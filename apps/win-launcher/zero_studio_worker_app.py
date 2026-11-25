@@ -273,7 +273,7 @@ class ZeroStudioWorkerApp:
         else:
             self.lbl_ps.configure(text="⚠ 未找到 Photoshop", fg="#fca5a5")
 
-        sync_url = self.env_cfg.get("WORKER_SYNC_URL") or f"http://{self.env_cfg.get('VPS_HOST', '156.238.228.39')}:8083"
+        sync_url = self.env_cfg.get("WORKER_SYNC_URL") or f"http://{self.env_cfg.get('VPS_HOST', 'your-vps-ip')}:8083"
         self.lbl_mac.configure(text=sync_url.replace("http://", "").replace("https://", ""), fg="#93c5fd")
 
         # Update log tail
@@ -329,7 +329,7 @@ class ZeroStudioWorkerApp:
         self._refresh_status()
 
     def open_control_center(self) -> None:
-        vps = self.env_cfg.get("VPS_HOST") or "156.238.228.39"
+        vps = self.env_cfg.get("VPS_HOST") or "your-vps-ip"
         port = self.env_cfg.get("FRP_PUBLIC_STUDIO_PORT") or "8081"
         webbrowser.open(f"http://{vps}:{port}")
 
@@ -342,7 +342,7 @@ class ZeroStudioWorkerApp:
 
     def ping_mac_async(self) -> None:
         def _ping() -> None:
-            vps = self.env_cfg.get("VPS_HOST") or "156.238.228.39"
+            vps = self.env_cfg.get("VPS_HOST") or "your-vps-ip"
             port = self.env_cfg.get("FRP_PUBLIC_BOOKING_PORT") or "8080"
             url = f"http://{vps}:{port}/api/settings"
             t0 = time.time()
